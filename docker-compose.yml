@@ -1,0 +1,7 @@
+services:
+  mongo:
+    image: mongo:4.4.21
+    restart: always
+    network_mode: host
+    volumes:
+      - ~/docker-data/mongo/db:/data/db

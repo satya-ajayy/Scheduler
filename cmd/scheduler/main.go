@@ -87,7 +87,7 @@ func main() {
 	updatedKonf := LoadSecrets(appKonf)
 
 	// Validate configuration before starting the server
-	if err = appKonf.Validate(); err != nil {
+	if err = updatedKonf.Validate(); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
 

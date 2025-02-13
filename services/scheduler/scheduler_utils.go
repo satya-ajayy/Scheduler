@@ -23,7 +23,7 @@ func (s *SchedulerService) Start(ctx context.Context) error {
 
 	for _, t := range tasks {
 		s.ScheduleTask(t)
-		//s.logger.Info(fmt.Sprintf("Successfully Scheduled Task :: %s", t.ID))
+		//s.logger.Info(fmt.Sprintf("Successfully Scheduled Task : %s", t.ID))
 	}
 
 	s.cron.Start()
@@ -59,7 +59,7 @@ func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) error {
 	s.tasksMu.Lock()
 	defer s.tasksMu.Unlock()
 	if _, exists := s.tasks[t.ID]; exists {
-		return fmt.Errorf("Task :: %s Is Already Scheduled", t.ID)
+		return fmt.Errorf("Task : %s Is Already Scheduled", t.ID)
 	}
 
 	executor := executer.NewExecutorService(s.logger, t, s.schedulerRepo)
@@ -73,7 +73,7 @@ func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) error {
 
 	entryID, err := s.cron.AddJob(updatedInterval, executor)
 	if err != nil {
-		return fmt.Errorf("Unable To Schedule Task :: %s due to %v", t.ID, err)
+		return fmt.Errorf("Unable To Schedule Task : %s due to %v", t.ID, err)
 	}
 	s.tasks[t.ID] = entryID
 	deleteBuffer := time.Second
@@ -94,9 +94,9 @@ func (s *SchedulerService) scheduleTaskWithDelay(duration time.Duration, t smode
 		case <-ticker.C:
 			err := s.ScheduleTaskNow(t)
 			if err != nil {
-				s.logger.Error(fmt.Sprintf("Unable To Schedule Task :: %s due to %v", t.ID, err))
+				s.logger.Error(fmt.Sprintf("Unable To Schedule Task : %s due to %v", t.ID, err))
 			}
-			s.logger.Info(fmt.Sprintf("Successfully Executed Task :: %s", t.ID))
+			s.logger.Info(fmt.Sprintf("Successfully Executed Task : %s", t.ID))
 			return
 		}
 	}
@@ -129,10 +129,10 @@ func (s *SchedulerService) DiscardTaskNow(taskID string) {
 	if entryID, exists := s.tasks[taskID]; exists {
 		s.cron.Remove(entryID)
 		delete(s.tasks, taskID)
-		s.logger.Info(fmt.Sprintf("Successfully Discarded Task :: %s", taskID))
+		s.logger.Info(fmt.Sprintf("Successfully Discarded Task : %s", taskID))
 		return
 	}
-	s.logger.Info(fmt.Sprintf("No Active Task With ID :: %s Found To Discard", taskID))
+	s.logger.Info(fmt.Sprintf("No Active Task With ID : %s Found To Discard", taskID))
 }
 
 // discardTaskWithDelay discards the task after the duration.

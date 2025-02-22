@@ -1,11 +1,11 @@
 package models
 
 import (
-	// 	Go Internal Packages
+	// Go Internal Packages
 	"strings"
 	"time"
 
-	//Local Packages
+	// Local Packages
 	errors "scheduler/errors"
 	utils "scheduler/utils"
 )

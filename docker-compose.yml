@@ -4,4 +4,8 @@ services:
     restart: always
     network_mode: host
     volumes:
-      - ~/docker-data/mongo/db:/data/db
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
+    external: true

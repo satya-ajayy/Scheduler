@@ -6,6 +6,8 @@ import (
 )
 
 var DefaultConfig = []byte(`
+application: "scheduler"
+
 logger:
   level: "info"
 
@@ -20,11 +22,12 @@ mongo:
 `)
 
 type Config struct {
-	Logger     Logger `koanf:"logger"`
-	Listen     string `koanf:"listen"`
-	Prefix     string `koanf:"prefix"`
-	IsProdMode bool   `koanf:"is_prod_mode"`
-	Mongo      Mongo  `koanf:"mongo"`
+	Application string `koanf:"application"`
+	Logger      Logger `koanf:"logger"`
+	Listen      string `koanf:"listen"`
+	Prefix      string `koanf:"prefix"`
+	IsProdMode  bool   `koanf:"is_prod_mode"`
+	Mongo       Mongo  `koanf:"mongo"`
 }
 
 type Logger struct {
@@ -39,6 +42,9 @@ type Mongo struct {
 func (c *Config) Validate() error {
 	ve := errors.ValidationErrs()
 
+	if c.Application == "" {
+		ve.Add("application", "cannot be empty")
+	}
 	if c.Listen == "" {
 		ve.Add("listen", "cannot be empty")
 	}

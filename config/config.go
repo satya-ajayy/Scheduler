@@ -9,7 +9,7 @@ var DefaultConfig = []byte(`
 application: "scheduler"
 
 logger:
-  level: "info"
+  level: "debug"
 
 listen: ":4202"
 

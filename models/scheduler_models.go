@@ -63,7 +63,7 @@ func (s *TaskModel) ValidateCreation() error {
 	if s.ScheduleTime == "" {
 		ve.Add("scheduleTime", "cannot be empty")
 	}
-	if s.IsRecurEnabled && s.Recur <= 3600 {
+	if s.IsRecurEnabled && s.Recur < 3600 {
 		ve.Add("recur", "needs to be greater than 1hr if recur is enabled")
 	}
 	if _, err := time.Parse("2006-01-02", s.ScheduleDate); err != nil {

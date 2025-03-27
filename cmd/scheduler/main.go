@@ -44,6 +44,7 @@ func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) 
 		return nil, err
 	}
 	schedulerHandler := handlers.NewSchedulerHandler(schedulerSvc)
+
 	server := shttp.NewServer(k.Prefix, logger, healthSvc, schedulerHandler)
 	return server, nil
 }

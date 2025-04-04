@@ -43,6 +43,8 @@ func NewServer(
 
 func (s *Server) Listen(ctx context.Context, addr string) error {
 	r := chi.NewRouter()
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
 	r.Use(chizap.New(s.logger, &chizap.Opts{
 		WithReferer:   false,
 		WithUserAgent: false,

@@ -10,9 +10,6 @@ import (
 	smodels "scheduler/models"
 	executer "scheduler/services/executer"
 	utils "scheduler/utils"
-
-	// External Packages
-	"github.com/robfig/cron/v3"
 )
 
 // Start starts the scheduler.
@@ -149,24 +146,4 @@ func (s *SchedulerService) discardTaskWithDelay(duration time.Duration, taskID s
 			return
 		}
 	}
-}
-
-// Restart stops all current tasks and restarts the service.
-func (s *SchedulerService) Restart(ctx context.Context) error {
-	// Stop all the tasks
-	s.cron.Stop()
-
-	s.tasksMu.Lock()
-	defer s.tasksMu.Unlock()
-
-	// Clear all the tasks
-	s.tasks = make(map[string]cron.EntryID)
-	s.cron = cron.New(cron.WithSeconds(), cron.WithLocation(time.UTC))
-
-	// Start all the tasks again
-	err := s.Start(ctx)
-	if err != nil {
-		return fmt.Errorf("Failed to restart Scheduler: %v", err)
-	}
-	return nil
 }

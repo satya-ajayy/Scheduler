@@ -39,7 +39,12 @@ type SchedulerService struct {
 func NewSchedulerService(schedulerRepo SchedulerRepo, logger *zap.Logger) *SchedulerService {
 	cronObj := cron.New(cron.WithSeconds(), cron.WithLocation(time.UTC))
 	tasksMap := make(map[string]cron.EntryID)
-	return &SchedulerService{logger: logger, schedulerRepo: schedulerRepo, cron: cronObj, tasks: tasksMap}
+	return &SchedulerService{
+		logger:        logger,
+		schedulerRepo: schedulerRepo,
+		cron:          cronObj,
+		tasks:         tasksMap,
+	}
 }
 
 func (s *SchedulerService) GetOne(ctx context.Context, taskID string) (*smodels.TaskModel, error) {

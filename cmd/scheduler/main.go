@@ -27,7 +27,7 @@ import (
 )
 
 // InitializeServer sets up an HTTP server with defined handlers. Repositories are initialized,
-// creates the services, and subsequently constructs handlers for the services
+// create the services, and subsequently construct handlers for the services
 func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) (*shttp.Server, error) {
 	// Connect to mongodb
 	mongoClient, err := mongodb.Connect(ctx, k.Mongo.URI)

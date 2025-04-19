@@ -10,10 +10,13 @@ import (
 	smodels "scheduler/models"
 	executer "scheduler/services/executer"
 	utils "scheduler/utils"
+
+	// External Packages
+	"github.com/robfig/cron/v3"
 )
 
 // Start starts the scheduler.
-// It schedules all the active tasks that read from the database.
+// It schedules all the active tasks that are in the database.
 func (s *SchedulerService) Start(ctx context.Context) error {
 	curUnix := utils.CurrentUTCUnix()
 	tasks, err := s.schedulerRepo.GetActive(ctx, curUnix)
@@ -23,7 +26,7 @@ func (s *SchedulerService) Start(ctx context.Context) error {
 
 	for _, t := range tasks {
 		s.ScheduleTask(t)
-		//s.logger.Info(fmt.Sprintf("Successfully Scheduled Task : %s", t.ID))
+		//s.logger.Info(fmt.Sprintf("Successfully Scheduled Task: %s", t.ID))
 	}
 
 	s.cron.Start()
@@ -50,7 +53,7 @@ func (s *SchedulerService) ScheduleTask(t smodels.TaskModel) {
 
 // ScheduleTaskNow adds the task to the cron.
 // Runs the task immediately because cron/v3 doesn't support immediate scheduling.
-// and also triggers a goroutine to discard the task after the end time.
+// And also triggers a goroutine to discard the task after the end time.
 // It returns an error if the task is already scheduled.
 func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) error {
 	endUnix := utils.Unix(t.EndUnix)
@@ -59,12 +62,12 @@ func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) error {
 	s.tasksMu.Lock()
 	defer s.tasksMu.Unlock()
 	if _, exists := s.tasks[t.ID]; exists {
-		return fmt.Errorf("Task : %s Is Already Scheduled", t.ID)
+		return fmt.Errorf("Task: %s Is Already Scheduled", t.ID)
 	}
 
 	executor := executer.NewExecutorService(s.logger, t, s.schedulerRepo)
 	updatedInterval := fmt.Sprintf("@every %ds", t.Recur)
-	// runs the task in separate goroutine, this shouldn't be blocking
+	// Runs the task in a separate goroutine, this shouldn't be blocking
 	go executor.Run()
 	if t.IsRecurEnabled == false {
 		s.logger.Info("Non Recurring Task, So Not Added To Cron")
@@ -73,7 +76,7 @@ func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) error {
 
 	entryID, err := s.cron.AddJob(updatedInterval, executor)
 	if err != nil {
-		return fmt.Errorf("Unable To Schedule Task : %s due to %v", t.ID, err)
+		return fmt.Errorf("Unable To Schedule Task: %s due to %v", t.ID, err)
 	}
 	s.tasks[t.ID] = entryID
 	deleteBuffer := time.Second
@@ -86,7 +89,7 @@ func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) error {
 // calls ScheduleTaskNow after the duration.
 func (s *SchedulerService) scheduleTaskWithDelay(duration time.Duration, t smodels.TaskModel) {
 	ticker := time.NewTicker(duration)
-	s.logger.Info(fmt.Sprintf("Starting task %s with delay at %s", t.ID, duration))
+	s.logger.Info(fmt.Sprintf("Starting task %s with delay of %s", t.ID, duration))
 
 	defer ticker.Stop()
 	for {
@@ -94,16 +97,16 @@ func (s *SchedulerService) scheduleTaskWithDelay(duration time.Duration, t smode
 		case <-ticker.C:
 			err := s.ScheduleTaskNow(t)
 			if err != nil {
-				s.logger.Error(fmt.Sprintf("Unable To Schedule Task : %s due to %v", t.ID, err))
+				s.logger.Error(fmt.Sprintf("Unable To Schedule Task: %s due to %v", t.ID, err))
 			}
-			s.logger.Info(fmt.Sprintf("Successfully Executed Task : %s", t.ID))
+			s.logger.Info(fmt.Sprintf("Successfully Executed Task: %s", t.ID))
 			return
 		}
 	}
 }
 
 // scheduleExistingTask schedules the existing task.
-// it calculates the next recur time and then adds to the cron.
+// it calculates the next recurred time and then adds to the cron.
 // beware: panics if the task.StartUnix is greater than the current time.
 func (s *SchedulerService) scheduleExistingTask(t smodels.TaskModel) {
 	startUnix := utils.Unix(t.StartUnix)
@@ -129,10 +132,10 @@ func (s *SchedulerService) DiscardTaskNow(taskID string) {
 	if entryID, exists := s.tasks[taskID]; exists {
 		s.cron.Remove(entryID)
 		delete(s.tasks, taskID)
-		s.logger.Info(fmt.Sprintf("Successfully Discarded Task : %s", taskID))
+		s.logger.Info(fmt.Sprintf("Successfully Discarded Task: %s", taskID))
 		return
 	}
-	s.logger.Info(fmt.Sprintf("No Active Task With ID : %s Found To Discard", taskID))
+	s.logger.Info(fmt.Sprintf("No Active Task With ID: %s Found To Discard", taskID))
 }
 
 // discardTaskWithDelay discards the task after the duration.
@@ -146,4 +149,24 @@ func (s *SchedulerService) discardTaskWithDelay(duration time.Duration, taskID s
 			return
 		}
 	}
+}
+
+// Restart stops all current tasks and restarts the service.
+func (s *SchedulerService) Restart(ctx context.Context) error {
+	// Stop all the tasks
+	s.cron.Stop()
+
+	s.tasksMu.Lock()
+	defer s.tasksMu.Unlock()
+
+	// Clear all the tasks
+	s.tasks = make(map[string]cron.EntryID)
+	s.cron = cron.New(cron.WithSeconds(), cron.WithLocation(time.UTC))
+
+	// Start all the tasks again
+	err := s.Start(ctx)
+	if err != nil {
+		return fmt.Errorf("Failed to restart Scheduler: %v", err)
+	}
+	return nil
 }

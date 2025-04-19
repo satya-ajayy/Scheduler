@@ -54,6 +54,7 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 	r.Route(s.prefix, func(r chi.Router) {
 		r.Route("/v1", func(r chi.Router) {
 			r.Get("/health", s.HealthCheckHandler)
+			r.Post("/restart", s.ToHTTPHandlerFunc(s.scheduler.Restart))
 
 			r.Group(func(r chi.Router) {
 				r.Route("/task", func(r chi.Router) {

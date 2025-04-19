@@ -20,6 +20,7 @@ type SchedulerService interface {
 	Insert(ctx context.Context, task smodels.TaskModel) (string, error)
 	Delete(ctx context.Context, taskID string) error
 	Toggle(ctx context.Context, taskID string) error
+	Restart(ctx context.Context) error
 }
 
 type SchedulerHandler struct {
@@ -51,7 +52,7 @@ func (h *SchedulerHandler) Insert(w http.ResponseWriter, r *http.Request) (respo
 	taskID, err := h.schedulerService.Insert(r.Context(), task)
 	if err == nil {
 		return map[string]interface{}{
-			"message": fmt.Sprintf("Created Task With ID : %s", taskID),
+			"message": fmt.Sprintf("Created Task With ID: %s", taskID),
 		}, http.StatusCreated, nil
 	}
 	return
@@ -62,7 +63,7 @@ func (h *SchedulerHandler) Delete(w http.ResponseWriter, r *http.Request) (respo
 	err = h.schedulerService.Delete(r.Context(), taskID)
 	if err == nil {
 		return map[string]interface{}{
-			"message": fmt.Sprintf("Deleted Task With ID : %s", taskID),
+			"message": fmt.Sprintf("Deleted Task With ID: %s", taskID),
 		}, http.StatusOK, nil
 	}
 	return
@@ -73,7 +74,17 @@ func (h *SchedulerHandler) Toggle(w http.ResponseWriter, r *http.Request) (respo
 	err = h.schedulerService.Toggle(r.Context(), taskID)
 	if err == nil {
 		return map[string]interface{}{
-			"message": fmt.Sprintf("Toggled Task With ID : %s", taskID),
+			"message": fmt.Sprintf("Toggled Task With ID: %s", taskID),
+		}, http.StatusOK, nil
+	}
+	return
+}
+
+func (h *SchedulerHandler) Restart(w http.ResponseWriter, r *http.Request) (response any, status int, err error) {
+	err = h.schedulerService.Restart(r.Context())
+	if err == nil {
+		return map[string]interface{}{
+			"message": fmt.Sprintf("Restarted Scheduler Service"),
 		}, http.StatusOK, nil
 	}
 	return

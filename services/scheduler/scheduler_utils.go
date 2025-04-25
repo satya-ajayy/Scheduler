@@ -71,6 +71,7 @@ func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) {
 	entryID, err := s.cron.AddJob(updatedInterval, executor)
 	if err != nil {
 		s.logger.Error(fmt.Sprintf("Unable To Schedule Task: %s due to %v", t.ID, err))
+		return
 	}
 	s.tasks[t.ID] = entryID
 	deleteBuffer := time.Second

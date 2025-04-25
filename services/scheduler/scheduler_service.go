@@ -34,16 +34,20 @@ type SchedulerService struct {
 	cron          *cron.Cron
 	tasks         map[string]cron.EntryID
 	tasksMu       sync.Mutex
+	timers        map[string]context.CancelFunc
+	timersMu      sync.Mutex
 }
 
 func NewSchedulerService(schedulerRepo SchedulerRepo, logger *zap.Logger) *SchedulerService {
 	cronObj := cron.New(cron.WithSeconds(), cron.WithLocation(time.UTC))
 	tasksMap := make(map[string]cron.EntryID)
+	timersMap := make(map[string]context.CancelFunc)
 	return &SchedulerService{
 		logger:        logger,
 		schedulerRepo: schedulerRepo,
 		cron:          cronObj,
 		tasks:         tasksMap,
+		timers:        timersMap,
 	}
 }
 

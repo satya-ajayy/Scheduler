@@ -37,10 +37,7 @@ func (s *SchedulerService) ScheduleTask(t smodels.TaskModel) {
 	startUnix := utils.Unix(t.StartUnix)
 
 	if curUnix == startUnix {
-		err := s.ScheduleTaskNow(t)
-		if err != nil {
-			s.logger.Error(err.Error())
-		}
+		s.ScheduleTaskNow(t)
 	} else if curUnix < startUnix {
 		go s.scheduleTaskWithDelay(startUnix.Sub(curUnix, false), t)
 	} else {
@@ -52,14 +49,14 @@ func (s *SchedulerService) ScheduleTask(t smodels.TaskModel) {
 // Runs the task immediately because cron/v3 doesn't support immediate scheduling.
 // And also triggers a goroutine to discard the task after the end time.
 // It returns an error if the task is already scheduled.
-func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) error {
+func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) {
 	endUnix := utils.Unix(t.EndUnix)
 	curUnix := utils.CurrentUTCUnix()
 
 	s.tasksMu.Lock()
 	defer s.tasksMu.Unlock()
 	if _, exists := s.tasks[t.ID]; exists {
-		return fmt.Errorf("Task: %s Is Already Scheduled", t.ID)
+		s.logger.Error(fmt.Sprintf("Task: %s Is Already Scheduled", t.ID))
 	}
 
 	executor := executer.NewExecutorService(s.logger, t, s.schedulerRepo)
@@ -68,35 +65,47 @@ func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) error {
 	go executor.Run()
 	if t.IsRecurEnabled == false {
 		s.logger.Info("Non Recurring Task, So Not Added To Cron")
-		return nil
+		return
 	}
 
 	entryID, err := s.cron.AddJob(updatedInterval, executor)
 	if err != nil {
-		return fmt.Errorf("Unable To Schedule Task: %s due to %v", t.ID, err)
+		s.logger.Error(fmt.Sprintf("Unable To Schedule Task: %s due to %v", t.ID, err))
 	}
 	s.tasks[t.ID] = entryID
 	deleteBuffer := time.Second
 	deletesIn := endUnix.Sub(curUnix, false) + deleteBuffer
 	go s.discardTaskWithDelay(deletesIn, t.ID)
-	return nil
+	return
 }
 
 // scheduleTaskWithDelay schedules the task after the duration.
 // calls ScheduleTaskNow after the duration.
+// uses context cancellation to allow cancelling the scheduled task before it runs.
 func (s *SchedulerService) scheduleTaskWithDelay(duration time.Duration, t smodels.TaskModel) {
+	ctx, cancel := context.WithCancel(context.Background())
+	s.timersMu.Lock()
+	scheduleKey := "schedule_" + t.ID
+	s.timers[scheduleKey] = cancel
+	s.timersMu.Unlock()
+
 	ticker := time.NewTicker(duration)
 	s.logger.Info(fmt.Sprintf("Starting task %s with delay of %s", t.ID, duration))
 
 	defer ticker.Stop()
+	defer func() {
+		s.timersMu.Lock()
+		delete(s.timers, scheduleKey)
+		s.timersMu.Unlock()
+	}()
+
 	for {
 		select {
 		case <-ticker.C:
-			err := s.ScheduleTaskNow(t)
-			if err != nil {
-				s.logger.Error(fmt.Sprintf("Unable To Schedule Task: %s due to %v", t.ID, err))
-			}
-			s.logger.Info(fmt.Sprintf("Successfully Executed Task: %s", t.ID))
+			s.ScheduleTaskNow(t)
+			return
+		case <-ctx.Done():
+			s.logger.Info(fmt.Sprintf("Cancelled Pending Schedule Timer: %s", t.ID))
 			return
 		}
 	}
@@ -121,9 +130,25 @@ func (s *SchedulerService) scheduleExistingTask(t smodels.TaskModel) {
 }
 
 // DiscardTaskNow removes a task from the scheduler
-// and won't stop the task if it is running.
-// if the task is not found in scheduler, it logs a message.
+// also cancels any pending timers for this task ID.
 func (s *SchedulerService) DiscardTaskNow(taskID string) {
+	s.timersMu.Lock()
+	// Check for schedule timer
+	scheduleKey := "schedule_" + taskID
+	if cancelFunc, exists := s.timers[scheduleKey]; exists {
+		cancelFunc()
+		delete(s.timers, scheduleKey)
+	}
+
+	// Check for discard timer
+	discardKey := "discard_" + taskID
+	if cancelFunc, exists := s.timers[discardKey]; exists {
+		cancelFunc()
+		delete(s.timers, discardKey)
+	}
+	s.timersMu.Unlock()
+
+	// Remove from cron scheduler
 	s.tasksMu.Lock()
 	defer s.tasksMu.Unlock()
 	if entryID, exists := s.tasks[taskID]; exists {
@@ -136,13 +161,30 @@ func (s *SchedulerService) DiscardTaskNow(taskID string) {
 }
 
 // discardTaskWithDelay discards the task after the duration.
+// Uses context cancellation to allow cancelling the discard operation before it runs.
 func (s *SchedulerService) discardTaskWithDelay(duration time.Duration, taskID string) {
+	ctx, cancel := context.WithCancel(context.Background())
+	s.timersMu.Lock()
+	discardKey := "discard_" + taskID
+	s.timers[discardKey] = cancel
+	s.timersMu.Unlock()
+
 	ticker := time.NewTicker(duration)
+
 	defer ticker.Stop()
+	defer func() {
+		s.timersMu.Lock()
+		delete(s.timers, discardKey)
+		s.timersMu.Unlock()
+	}()
+
 	for {
 		select {
 		case <-ticker.C:
 			s.DiscardTaskNow(taskID)
+			return
+		case <-ctx.Done():
+			s.logger.Info(fmt.Sprintf("Cancelled Pending Discard Timer: %s", taskID))
 			return
 		}
 	}

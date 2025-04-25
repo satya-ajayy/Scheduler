@@ -50,67 +50,67 @@ func (s *Status) IsAlreadyExecuted() bool {
 	return s.LastExecutedAt != ""
 }
 
-func (s *TaskModel) ValidateCreation() error {
+func (t *TaskModel) ValidateCreation() error {
 	ve := errors.ValidationErrs()
 
-	s.Schedule = strings.ToUpper(s.Schedule)
-	if s.Schedule == "" {
-		s.Schedule = "NOW"
+	t.Schedule = strings.ToUpper(t.Schedule)
+	if t.Schedule == "" {
+		t.Schedule = "NOW"
 	}
-	if s.ScheduleDate == "" {
+	if t.ScheduleDate == "" {
 		ve.Add("scheduleDate", "cannot be empty")
 	}
-	if s.ScheduleTime == "" {
+	if t.ScheduleTime == "" {
 		ve.Add("scheduleTime", "cannot be empty")
 	}
-	if s.IsRecurEnabled && s.Recur < 3600 {
+	if t.IsRecurEnabled && t.Recur < 3600 {
 		ve.Add("recur", "needs to be greater than 1hr if recur is enabled")
 	}
-	if _, err := time.Parse("2006-01-02", s.ScheduleDate); err != nil {
+	if _, err := time.Parse("2006-01-02", t.ScheduleDate); err != nil {
 		ve.Add("scheduleDate", "Invalid format, expected YYYY-MM-DD")
 	}
-	if _, err := time.Parse("15:04", s.ScheduleTime); err != nil {
+	if _, err := time.Parse("15:04", t.ScheduleTime); err != nil {
 		ve.Add("scheduleTime", "Invalid format, expected HH:MM (IST)")
 	}
-	if s.NumberOfAttempts == 0 {
-		s.NumberOfAttempts = 3
+	if t.NumberOfAttempts == 0 {
+		t.NumberOfAttempts = 3
 	}
-	if s.ExpiresAt != "" {
-		if _, err := time.Parse("2006-01-02T15:04:05.999Z", s.ExpiresAt); err != nil {
+	if t.ExpiresAt != "" {
+		if _, err := time.Parse("2006-01-02T15:04:05.999Z", t.ExpiresAt); err != nil {
 			ve.Add("expiresAt", "Invalid format, expected RFC3339 NANO")
 		}
 	}
-	if s.ExpiresAt == "" {
-		s.ExpiresAt = utils.GetExpiryTime()
+	if t.ExpiresAt == "" {
+		t.ExpiresAt = utils.GetExpiryTime()
 	}
-	if s.TaskData.TaskType == "" {
+	if t.TaskData.TaskType == "" {
 		ve.Add("taskData.taskType", "cannot be empty")
 	}
-	if s.TaskData.RequestType == "" {
+	if t.TaskData.RequestType == "" {
 		ve.Add("taskData.requestType", "cannot be empty")
 	}
-	err := s.TaskData.RequestType.Validate()
+	err := t.TaskData.RequestType.Validate()
 	if err != nil {
 		ve.Add("taskData.requestType", err.Error())
 	}
-	if s.TaskData.URL == "" {
+	if t.TaskData.URL == "" {
 		ve.Add("taskData.url", "cannot be empty")
 	}
-	if s.Status.LastExecutedAt != "" || s.Status.ExceptionMessage != "" {
+	if t.Status.LastExecutedAt != "" || t.Status.ExceptionMessage != "" {
 		ve.Add("status", "need to be empty for new task")
 	}
 
 	if ve.Len() == 0 {
-		StartUnix := utils.ToUnixFromISTDateTime(s.ScheduleTime, s.ScheduleDate)
-		EndUnix := utils.ToUnixFromUTCTime(s.ExpiresAt)
-		if utils.Unix(StartUnix) < utils.CurrentUTCUnix() {
-			ve.Add("scheduleDate and Time", "must be greater than current time")
-		}
+		StartUnix := utils.ToUnixFromISTDateTime(t.ScheduleTime, t.ScheduleDate)
+		EndUnix := utils.ToUnixFromUTCTime(t.ExpiresAt)
+		//if utils.Unix(StartUnix) < utils.CurrentUTCUnix() {
+		//	ve.Add("scheduleDate and Time", "must be greater than current time")
+		//}
 		if utils.Unix(EndUnix) < utils.CurrentUTCUnix() || StartUnix > EndUnix {
 			ve.Add("expiresAt", "must be greater than current time")
 		}
-		s.StartUnix = StartUnix
-		s.EndUnix = EndUnix
+		t.StartUnix = StartUnix
+		t.EndUnix = EndUnix
 	}
 	return ve.Err()
 }

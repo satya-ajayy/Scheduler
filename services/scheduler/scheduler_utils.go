@@ -59,7 +59,7 @@ func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) {
 		s.logger.Error(fmt.Sprintf("Task: %s Is Already Scheduled", t.ID))
 	}
 
-	executor := executer.NewExecutorService(s.logger, t, s.schedulerRepo)
+	executor := executer.NewExecutorService(s.logger, t, s.schedulerRepo, s.config)
 	updatedInterval := fmt.Sprintf("@every %ds", t.Recur)
 	// Runs the task in a separate goroutine, this shouldn't be blocking
 	go executor.Run()

@@ -33,7 +33,7 @@ func NewSender(k config.Slack, isProd bool) Sender {
 				Type: "header",
 				Text: Text{
 					Type: "plain_text",
-					Text: title,
+					Text: fmt.Sprintf("Scheduler: %s", title),
 				},
 			}
 			body := Block{

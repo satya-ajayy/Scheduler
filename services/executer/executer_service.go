@@ -82,6 +82,7 @@ func (s *ExecutorService) Run() {
 			if sendErr := sender(alert, exceptionMsg); sendErr != nil {
 				s.logger.Error("Error sending slack alert:", zap.Error(sendErr))
 			}
+			return
 		}
 
 		jitter := time.Duration(rand.Intn(300)) * time.Millisecond

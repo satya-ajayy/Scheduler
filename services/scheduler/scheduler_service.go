@@ -4,11 +4,11 @@ import (
 	// Go Internal Packages
 	"context"
 	"fmt"
-	"scheduler/config"
 	"sync"
 	"time"
 
 	// Local Packages
+	config "scheduler/config"
 	errors "scheduler/errors"
 	smodels "scheduler/models"
 	utils "scheduler/utils"

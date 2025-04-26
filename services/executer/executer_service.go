@@ -79,7 +79,7 @@ func (s *ExecutorService) Run() {
 			// send slack alert
 			sender := utils.NewSender(s.config.Slack, s.config.IsProdMode)
 			alert := fmt.Sprintf("Task %s failed after %d attempts", s.task.ID, attempts)
-			if sendErr := sender(alert, err); sendErr != nil {
+			if sendErr := sender(alert, exceptionMsg); sendErr != nil {
 				s.logger.Error("Error sending slack alert:", zap.Error(sendErr))
 			}
 		}

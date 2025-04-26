@@ -24,10 +24,10 @@ type Payload struct {
 	Blocks []Block `json:"blocks"`
 }
 
-type Sender = func(title string, err error) error
+type Sender = func(title string, errText string) error
 
 func NewSender(k config.Slack, isProd bool) Sender {
-	return func(title string, err error) error {
+	return func(title string, errText string) error {
 		if isProd || (!isProd && k.SendAlertInDev) {
 			header := Block{
 				Type: "header",
@@ -37,18 +37,11 @@ func NewSender(k config.Slack, isProd bool) Sender {
 				},
 			}
 
-			var errorText string
-			if err != nil {
-				errorText = err.Error()
-			} else {
-				errorText = "No specific error details available"
-			}
-
 			body := Block{
 				Type: "section",
 				Text: Text{
 					Type: "mrkdwn",
-					Text: fmt.Sprintf("```\n%s\n```", errorText),
+					Text: fmt.Sprintf("```\n%s\n```", errText),
 				},
 			}
 			payload := Payload{

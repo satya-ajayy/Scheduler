@@ -8,6 +8,7 @@ import (
 	"time"
 
 	// Local Packages
+	config "scheduler/config"
 	smodels "scheduler/models"
 	utils "scheduler/utils"
 
@@ -23,10 +24,16 @@ type ExecutorService struct {
 	logger *zap.Logger
 	task   smodels.TaskModel
 	repo   SchedulerRepo
+	config config.Config
 }
 
-func NewExecutorService(logger *zap.Logger, task smodels.TaskModel, repo SchedulerRepo) *ExecutorService {
-	return &ExecutorService{logger: logger, task: task, repo: repo}
+func NewExecutorService(logger *zap.Logger, task smodels.TaskModel, repo SchedulerRepo, config config.Config) *ExecutorService {
+	return &ExecutorService{
+		logger: logger,
+		task:   task,
+		repo:   repo,
+		config: config,
+	}
 }
 
 func (s *ExecutorService) Run() {
@@ -58,15 +65,22 @@ func (s *ExecutorService) Run() {
 		if attempt == attempts {
 			exceptionMsg := ""
 			if resp != nil {
-				fmt.Println("API call to " + data.URL + " is failed with status: " + resp.Status)
+				s.logger.Warn("API call to " + data.URL + " is failed with status: " + resp.Status)
 				exceptionMsg = resp.Status
 			}
 			s.logger.Error("Max retry attempts reached, task failed", zap.String("task_id", s.task.ID))
 			if err != nil {
 				exceptionMsg = err.Error()
 			}
+			// update task status
 			if updateErr := s.repo.UpdateTaskStatus(ctx, s.task.ID, exceptionMsg, false); updateErr != nil {
 				s.logger.Error("Failed to update task status", zap.Error(updateErr))
+			}
+			// send slack alert
+			sender := utils.NewSender(s.config.Slack, s.config.IsProdMode)
+			alert := fmt.Sprintf("Task %s failed after %d attempts", s.task.ID, attempts)
+			if sendErr := sender(alert, exceptionMsg); sendErr != nil {
+				s.logger.Error("Error sending slack alert:", zap.Error(sendErr))
 			}
 			return
 		}

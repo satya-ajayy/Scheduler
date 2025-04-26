@@ -8,6 +8,7 @@ import (
 	"time"
 
 	// Local Packages
+	config "scheduler/config"
 	errors "scheduler/errors"
 	smodels "scheduler/models"
 	utils "scheduler/utils"
@@ -31,6 +32,7 @@ type SchedulerRepo interface {
 type SchedulerService struct {
 	logger        *zap.Logger
 	schedulerRepo SchedulerRepo
+	config        config.Config
 	cron          *cron.Cron
 	tasks         map[string]cron.EntryID
 	tasksMu       sync.Mutex
@@ -38,13 +40,14 @@ type SchedulerService struct {
 	timersMu      sync.Mutex
 }
 
-func NewSchedulerService(schedulerRepo SchedulerRepo, logger *zap.Logger) *SchedulerService {
+func NewSchedulerService(schedulerRepo SchedulerRepo, logger *zap.Logger, config config.Config) *SchedulerService {
 	cronObj := cron.New(cron.WithSeconds(), cron.WithLocation(time.UTC))
 	tasksMap := make(map[string]cron.EntryID)
 	timersMap := make(map[string]context.CancelFunc)
 	return &SchedulerService{
 		logger:        logger,
 		schedulerRepo: schedulerRepo,
+		config:        config,
 		cron:          cronObj,
 		tasks:         tasksMap,
 		timers:        timersMap,

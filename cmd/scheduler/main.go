@@ -37,7 +37,7 @@ func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) 
 
 	// Init repos, services && handlers
 	schedulerRepo := mongodb.NewSchedulerRepository(mongoClient)
-	schedulerSvc := scheduler.NewSchedulerService(schedulerRepo, logger)
+	schedulerSvc := scheduler.NewSchedulerService(schedulerRepo, logger, k)
 	healthSvc := health.NewService(logger, mongoClient)
 	err = schedulerSvc.Start(ctx)
 	if err != nil {

@@ -21,7 +21,7 @@ mongo:
   uri: "mongodb://localhost:27017"
 
 slack:
- webhook_url: "r"
+ webhook_url: "https://hooks.slack.com/services/your/webhook/url"
  send_alert_in_dev: false
 `)
 

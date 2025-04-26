@@ -3,7 +3,6 @@ package executer
 import (
 	// Go Internal Packages
 	"context"
-	"fmt"
 	"math/rand"
 	"time"
 
@@ -58,7 +57,7 @@ func (s *ExecutorService) Run() {
 		if attempt == attempts {
 			exceptionMsg := ""
 			if resp != nil {
-				fmt.Println("API call to " + data.URL + " is failed with status: " + resp.Status)
+				s.logger.Warn("API call to " + data.URL + " is failed with status: " + resp.Status)
 				exceptionMsg = resp.Status
 			}
 			s.logger.Error("Max retry attempts reached, task failed", zap.String("task_id", s.task.ID))
@@ -68,7 +67,6 @@ func (s *ExecutorService) Run() {
 			if updateErr := s.repo.UpdateTaskStatus(ctx, s.task.ID, exceptionMsg, false); updateErr != nil {
 				s.logger.Error("Failed to update task status", zap.Error(updateErr))
 			}
-			return
 		}
 
 		jitter := time.Duration(rand.Intn(300)) * time.Millisecond

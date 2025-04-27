@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	// Local Packages
-	"scheduler/errors"
+	errors "scheduler/errors"
 )
 
 // RespondJSON writes the data to the response writer as JSON

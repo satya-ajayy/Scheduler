@@ -33,5 +33,5 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/tx-stream:latest
-            ${{ secrets.DOCKER_USERNAME }}/tx-stream:${{ env.GIT_SHA }}
+            ${{ secrets.DOCKER_USERNAME }}/scheduler:latest
+            ${{ secrets.DOCKER_USERNAME }}/scheduler:${{ env.GIT_SHA }}

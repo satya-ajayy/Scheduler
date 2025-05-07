@@ -66,14 +66,18 @@ func (t *TaskModel) ValidateCreation() error {
 	if t.IsRecurEnabled && t.Recur < 3600 {
 		ve.Add("recur", "needs to be greater than 1hr if recur is enabled")
 	}
-	if _, err := time.Parse("2006-01-02", t.ScheduleDate); err != nil {
-		ve.Add("scheduleDate", "Invalid format, expected YYYY-MM-DD")
-	}
-	if _, err := time.Parse("15:04", t.ScheduleTime); err != nil {
-		ve.Add("scheduleTime", "Invalid format, expected HH:MM (IST)")
-	}
 	if t.NumberOfAttempts == 0 {
 		t.NumberOfAttempts = 3
+	}
+	if t.ScheduleDate != "" {
+		if _, err := time.Parse("2006-01-02", t.ScheduleDate); err != nil {
+			ve.Add("scheduleDate", "Invalid format, expected YYYY-MM-DD")
+		}
+	}
+	if t.ScheduleTime != "" {
+		if _, err := time.Parse("15:04", t.ScheduleTime); err != nil {
+			ve.Add("scheduleTime", "Invalid format, expected HH:MM (IST)")
+		}
 	}
 	if t.ExpiresAt != "" {
 		if _, err := time.Parse("2006-01-02T15:04:05.999Z", t.ExpiresAt); err != nil {
@@ -89,9 +93,10 @@ func (t *TaskModel) ValidateCreation() error {
 	if t.TaskData.RequestType == "" {
 		ve.Add("taskData.requestType", "cannot be empty")
 	}
-	err := t.TaskData.RequestType.Validate()
-	if err != nil {
-		ve.Add("taskData.requestType", err.Error())
+	if t.TaskData.RequestType != "" {
+		if err := t.TaskData.RequestType.Validate(); err != nil {
+			ve.Add("taskData.requestType", err.Error())
+		}
 	}
 	if t.TaskData.URL == "" {
 		ve.Add("taskData.url", "cannot be empty")

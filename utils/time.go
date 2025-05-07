@@ -29,8 +29,8 @@ func ToUnixFromISTDateTime(scheduleTime, scheduleDate string) int64 {
 }
 
 func ToUnixFromUTCTime(utcTime string) int64 {
-	expiryTime, _ := time.Parse("2006-01-02T15:04:05.999Z", utcTime)
-	return expiryTime.Unix()
+	t, _ := time.Parse("2006-01-02T15:04:05.999Z", utcTime)
+	return t.Unix()
 }
 
 // Sub returns the difference between a and b in time duration

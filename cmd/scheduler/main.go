@@ -38,13 +38,14 @@ func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) 
 	// Init repos, services && handlers
 	schedulerRepo := mongodb.NewSchedulerRepository(mongoClient)
 	schedulerSvc := scheduler.NewSchedulerService(schedulerRepo, logger, k)
-	healthSvc := health.NewService(logger, mongoClient)
+
 	err = schedulerSvc.Start(ctx)
 	if err != nil {
 		return nil, err
 	}
+	
+	healthSvc := health.NewService(logger, mongoClient)
 	schedulerHandler := handlers.NewSchedulerHandler(schedulerSvc)
-
 	server := shttp.NewServer(k.Prefix, logger, healthSvc, schedulerHandler)
 	return server, nil
 }
@@ -103,7 +104,8 @@ func main() {
 	if err != nil {
 		logger.Fatal("Cannot initialize server", zap.Error(err))
 	}
-	if err := srv.Listen(ctx, appKonf.Listen); err != nil {
+
+	if err = srv.Listen(ctx, appKonf.Listen); err != nil {
 		logger.Fatal("Cannot listen", zap.Error(err))
 	}
 }

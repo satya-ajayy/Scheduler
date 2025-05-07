@@ -47,7 +47,7 @@ func (r *SchedulerRepository) GetActive(ctx context.Context, curUnix utils.Unix)
 	var result []smodels.TaskModel
 	for cursor.Next(ctx) {
 		var task smodels.TaskModel
-		if err := cursor.Decode(&task); err != nil {
+		if err = cursor.Decode(&task); err != nil {
 			return nil, err
 		}
 		result = append(result, task)

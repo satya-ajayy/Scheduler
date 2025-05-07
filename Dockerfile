@@ -10,8 +10,10 @@ RUN go mod download
 ADD . .
 RUN go build -o /usr/local/bin/scheduler ./cmd/scheduler
 
-# runner image
-FROM gcr.io/distroless/static:latest
+# runner image with shell (alpine)
+FROM alpine:latest
+RUN apk add --no-cache tzdata
+
 WORKDIR /app
 COPY --from=base /usr/local/bin/scheduler scheduler
 

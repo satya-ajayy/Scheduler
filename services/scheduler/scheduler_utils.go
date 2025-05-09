@@ -116,6 +116,12 @@ func (s *SchedulerService) scheduleTaskWithDelay(duration time.Duration, t smode
 // it calculates the next recurred time and then adds to the cron.
 // beware: panics if the task.StartUnix is greater than the current time.
 func (s *SchedulerService) scheduleExistingTask(t smodels.TaskModel) {
+	if !t.IsRecurEnabled && t.Recur == 0 {
+		s.logger.Info(fmt.Sprintf("Executing Non Recurring Missed Task %s", t.ID))
+		s.ScheduleTaskNow(t)
+		return
+	}
+
 	startUnix := utils.Unix(t.StartUnix)
 	endUnix := utils.Unix(t.EndUnix)
 	curUnix := utils.CurrentUTCUnix()

@@ -63,6 +63,12 @@ func (t *TaskModel) ValidateCreation() error {
 	if t.ScheduleTime == "" {
 		ve.Add("scheduleTime", "cannot be empty")
 	}
+	if t.Recur < 0 {
+		ve.Add("recur", "cannot be negative")
+	}
+	if !t.IsRecurEnabled && t.Recur != 0 {
+		ve.Add("recur", "needs to be 0 for non-recurring task")
+	}
 	if t.IsRecurEnabled && t.Recur < 3600 {
 		ve.Add("recur", "needs to be greater than 1hr if recur is enabled")
 	}
@@ -108,11 +114,11 @@ func (t *TaskModel) ValidateCreation() error {
 	if ve.Len() == 0 {
 		StartUnix := utils.ToUnixFromISTDateTime(t.ScheduleTime, t.ScheduleDate)
 		EndUnix := utils.ToUnixFromUTCTime(t.ExpiresAt)
-		//if utils.Unix(StartUnix) < utils.CurrentUTCUnix() {
-		//	ve.Add("scheduleDate and Time", "must be greater than current time")
-		//}
+		if utils.Unix(StartUnix) < utils.CurrentUTCUnix() {
+			ve.Add("scheduleDate and Time", "must be greater than current time")
+		}
 		if utils.Unix(EndUnix) < utils.CurrentUTCUnix() || StartUnix > EndUnix {
-			ve.Add("expiresAt", "must be greater than current time")
+			ve.Add("expiresAt", "must be greater than current & schedule time")
 		}
 		t.StartUnix = StartUnix
 		t.EndUnix = EndUnix

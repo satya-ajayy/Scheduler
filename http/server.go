@@ -9,6 +9,7 @@ import (
 	// Local Packages
 	errors "scheduler/errors"
 	handlers "scheduler/http/handlers"
+	smiddleware "scheduler/http/middlewares"
 	resp "scheduler/http/response"
 	health "scheduler/services/health"
 
@@ -16,10 +17,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/zap"
-	"moul.io/chizap"
 )
 
-// Server struct follow the alphabet order
+// Server struct follows the alphabet order
 type Server struct {
 	health    *health.HealthCheckService
 	logger    *zap.Logger
@@ -45,11 +45,8 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(chizap.New(s.logger, &chizap.Opts{
-		WithReferer:   false,
-		WithUserAgent: false,
-	}))
 	r.Use(middleware.Recoverer)
+	r.Use(smiddleware.HTTPMiddleware(s.logger))
 
 	r.Route(s.prefix, func(r chi.Router) {
 		r.Route("/v1", func(r chi.Router) {

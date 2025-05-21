@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"scheduler/utils/constants"
 	"strconv"
 	"time"
+
+	// Local Packages
+	consts "scheduler/utils/constants"
 )
 
-func CallAPI(apiURL string, requestType constants.HttpRequestType, body interface{}, headers map[string]string, queryParams map[string]interface{}) (*http.Response, error) {
+func CallAPI(apiURL string, requestType consts.HttpRequestType, body interface{}, headers map[string]string, queryParams map[string]interface{}) (*http.Response, error) {
 	// Parse URL and add query parameters
 	reqURL, err := url.Parse(apiURL)
 	if err != nil {

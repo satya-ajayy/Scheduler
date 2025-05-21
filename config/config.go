@@ -22,7 +22,7 @@ mongo:
 
 slack:
  webhook_url: "https://hooks.slack.com/services/your/webhook/url"
- send_alert_in_dev: false
+ send_alerts_in_dev: false
 `)
 
 type Config struct {
@@ -45,7 +45,7 @@ type Mongo struct {
 
 type Slack struct {
 	WebhookURL     string `koanf:"webhook_url"`
-	SendAlertInDev bool   `koanf:"send_alert_in_dev"`
+	SendAlertInDev bool   `koanf:"send_alerts_in_dev"`
 }
 
 // Validate validates the configuration

@@ -6,7 +6,7 @@ import (
 
 	// Local Packages
 	smodels "scheduler/models"
-	utils "scheduler/utils"
+	helpers "scheduler/utils/helpers"
 
 	// External Packages
 	"go.mongodb.org/mongo-driver/bson"
@@ -30,7 +30,7 @@ func (r *SchedulerRepository) GetOne(ctx context.Context, taskID string) (smodel
 	return result, err
 }
 
-func (r *SchedulerRepository) GetActive(ctx context.Context, curUnix utils.Unix) ([]smodels.TaskModel, error) {
+func (r *SchedulerRepository) GetActive(ctx context.Context, curUnix helpers.Unix) ([]smodels.TaskModel, error) {
 	collection := r.client.Database("mybase").Collection(r.collection)
 	filter := bson.M{
 		"enable":  true,
@@ -67,7 +67,7 @@ func (r *SchedulerRepository) Insert(ctx context.Context, task smodels.TaskModel
 func (r *SchedulerRepository) UpdateEnable(ctx context.Context, taskID string, enable bool) error {
 	collection := r.client.Database("mybase").Collection(r.collection)
 	filter := bson.M{"_id": taskID}
-	currTime := utils.GetCurrentDateTime()
+	currTime := helpers.GetCurrentDateTime()
 	updatedFields := bson.M{"$set": bson.M{"enable": enable, "updatedAt": currTime}}
 	_, err := collection.UpdateOne(ctx, filter, updatedFields)
 	if err != nil {
@@ -94,7 +94,7 @@ func (r *SchedulerRepository) UpdateTaskStatus(ctx context.Context, taskID, exce
 	filter := bson.M{"_id": taskID}
 	updateData := bson.M{
 		"$set": bson.M{
-			"status.lastExecutedAt":   utils.GetCurrentDateTime(),
+			"status.lastExecutedAt":   helpers.GetCurrentDateTime(),
 			"status.isComplete":       isComplete,
 			"status.exceptionMessage": exceptionMsg,
 		},

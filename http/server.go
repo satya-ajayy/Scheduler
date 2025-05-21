@@ -21,7 +21,7 @@ import (
 
 // Server struct follow the alphabet order
 type Server struct {
-	health    *health.HealthCheckerService
+	health    *health.HealthCheckService
 	logger    *zap.Logger
 	prefix    string
 	scheduler *handlers.SchedulerHandler
@@ -30,7 +30,7 @@ type Server struct {
 func NewServer(
 	prefix string,
 	logger *zap.Logger,
-	healthCheckService *health.HealthCheckerService,
+	healthCheckService *health.HealthCheckService,
 	scheduler *handlers.SchedulerHandler,
 ) *Server {
 	return &Server{
@@ -57,10 +57,15 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 
 			r.Group(func(r chi.Router) {
 				r.Route("/task", func(r chi.Router) {
-					r.Get("/{taskId}", s.ToHTTPHandlerFunc(s.scheduler.GetOne))
+					r.Get("/", s.ToHTTPHandlerFunc(s.scheduler.GetOne))
 					r.Post("/", s.ToHTTPHandlerFunc(s.scheduler.Insert))
-					r.Delete("/{taskId}", s.ToHTTPHandlerFunc(s.scheduler.Delete))
-					r.Patch("/{taskId}/toggle", s.ToHTTPHandlerFunc(s.scheduler.Toggle))
+					r.Delete("/", s.ToHTTPHandlerFunc(s.scheduler.Delete))
+					r.Patch("/toggle", s.ToHTTPHandlerFunc(s.scheduler.Toggle))
+				})
+
+				r.Route("/helpers", func(r chi.Router) {
+					r.Get("/active-tasks", s.ToHTTPHandlerFunc(s.scheduler.GetActive))
+					r.Post("/execute-task", s.ToHTTPHandlerFunc(s.scheduler.Execute))
 				})
 			})
 		})
@@ -83,17 +88,18 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 	}
 }
 
-// ToHTTPHandlerFunc converts a handler function to a http.HandlerFunc.
+// ToHTTPHandlerFunc converts a handler function to an http.HandlerFunc.
 // This wrapper function is used to handle errors and respond to the client
 func (s *Server) ToHTTPHandlerFunc(handler func(w http.ResponseWriter, r *http.Request) (any, int, error)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		response, status, err := handler(w, r)
 		if err != nil {
-			switch err := err.(type) {
-			case *errors.Error:
-				resp.RespondError(w, err)
+			var errFromHandler *errors.Error
+			switch {
+			case errors.As(err, &errFromHandler):
+				resp.RespondError(w, errFromHandler)
 			default:
-				s.logger.Error("internal error", zap.Error(err))
+				s.logger.Error("internal error", zap.Error(errFromHandler))
 				resp.RespondMessage(w, http.StatusInternalServerError, "internal error")
 			}
 			return

@@ -9,13 +9,13 @@ import (
 	// Local Packages
 	smodels "scheduler/models"
 	executer "scheduler/services/executer"
-	utils "scheduler/utils"
+	helpers "scheduler/utils/helpers"
 )
 
 // Start starts the scheduler.
 // It schedules all the active tasks that are in the database.
 func (s *SchedulerService) Start(ctx context.Context) error {
-	curUnix := utils.CurrentUTCUnix()
+	curUnix := helpers.CurrentUTCUnix()
 	tasks, err := s.schedulerRepo.GetActive(ctx, curUnix)
 	if err != nil {
 		return fmt.Errorf("Unable To Fetch Tasks Due To %v", err)
@@ -23,7 +23,6 @@ func (s *SchedulerService) Start(ctx context.Context) error {
 
 	for _, t := range tasks {
 		s.ScheduleTask(t)
-		//s.logger.Info(fmt.Sprintf("Successfully Scheduled Task: %s", t.ID))
 	}
 
 	s.cron.Start()
@@ -33,8 +32,8 @@ func (s *SchedulerService) Start(ctx context.Context) error {
 
 // ScheduleTask schedules the task based on the start time.
 func (s *SchedulerService) ScheduleTask(t smodels.TaskModel) {
-	curUnix := utils.CurrentUTCUnix()
-	startUnix := utils.Unix(t.StartUnix)
+	curUnix := helpers.CurrentUTCUnix()
+	startUnix := helpers.Unix(t.StartUnix)
 
 	if curUnix == startUnix {
 		s.ScheduleTaskNow(t)
@@ -50,8 +49,8 @@ func (s *SchedulerService) ScheduleTask(t smodels.TaskModel) {
 // And also triggers a goroutine to discard the task after the end time.
 // It returns an error if the task is already scheduled.
 func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) {
-	endUnix := utils.Unix(t.EndUnix)
-	curUnix := utils.CurrentUTCUnix()
+	endUnix := helpers.Unix(t.EndUnix)
+	curUnix := helpers.CurrentUTCUnix()
 
 	s.tasksMu.Lock()
 	defer s.tasksMu.Unlock()
@@ -59,8 +58,9 @@ func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) {
 		s.logger.Error(fmt.Sprintf("Task: %s Is Already Scheduled", t.ID))
 	}
 
-	executor := executer.NewExecutorService(s.logger, t, s.schedulerRepo, s.config)
+	executor := executer.NewExecutorService(s.logger, t, s.schedulerRepo, s.slack)
 	updatedInterval := fmt.Sprintf("@every %ds", t.Recur)
+
 	// Runs the task in a separate goroutine, this shouldn't be blocking
 	go executor.Run()
 	if t.IsRecurEnabled == false {
@@ -122,9 +122,9 @@ func (s *SchedulerService) scheduleExistingTask(t smodels.TaskModel) {
 		return
 	}
 
-	startUnix := utils.Unix(t.StartUnix)
-	endUnix := utils.Unix(t.EndUnix)
-	curUnix := utils.CurrentUTCUnix()
+	startUnix := helpers.Unix(t.StartUnix)
+	endUnix := helpers.Unix(t.EndUnix)
+	curUnix := helpers.CurrentUTCUnix()
 
 	// parsing the interval
 	intervalInSeconds := int64(t.Recur)
@@ -164,7 +164,7 @@ func (s *SchedulerService) DiscardTaskNow(taskID string) {
 		s.logger.Info(fmt.Sprintf("Successfully Discarded Task: %s", taskID))
 		return
 	}
-	s.logger.Info(fmt.Sprintf("No Active Task With ID: %s Found To Discard", taskID))
+	s.logger.Info(fmt.Sprintf("No Active Task %s Found To Discard", taskID))
 }
 
 // discardTaskWithDelay discards the task after the duration.
@@ -195,4 +195,11 @@ func (s *SchedulerService) discardTaskWithDelay(duration time.Duration, taskID s
 			return
 		}
 	}
+}
+
+// ExecuteTaskNow executes the task immediately, regardless of its cron schedule.
+func (s *SchedulerService) ExecuteTaskNow(task smodels.TaskModel) {
+	s.logger.Info(fmt.Sprintf("Executing Task %s Now", task.ID))
+	executor := executer.NewExecutorService(s.logger, task, s.schedulerRepo, s.slack)
+	go executor.Run()
 }

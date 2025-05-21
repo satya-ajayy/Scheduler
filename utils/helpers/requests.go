@@ -1,4 +1,4 @@
-package utils
+package helpers
 
 import (
 	// Go Internal Packages
@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"scheduler/utils/constants"
 	"strconv"
 	"time"
 )
 
-func CallAPI(apiURL string, requestType HttpRequestType, body interface{}, headers map[string]string, queryParams map[string]interface{}) (*http.Response, error) {
+func CallAPI(apiURL string, requestType constants.HttpRequestType, body interface{}, headers map[string]string, queryParams map[string]interface{}) (*http.Response, error) {
 	// Parse URL and add query parameters
 	reqURL, err := url.Parse(apiURL)
 	if err != nil {

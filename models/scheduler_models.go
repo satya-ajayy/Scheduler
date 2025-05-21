@@ -7,12 +7,13 @@ import (
 
 	// Local Packages
 	errors "scheduler/errors"
-	utils "scheduler/utils"
+	consts "scheduler/utils/constants"
+	helpers "scheduler/utils/helpers"
 )
 
 type TaskData struct {
 	TaskType    string                 `json:"taskType" bson:"taskType"`
-	RequestType utils.HttpRequestType  `json:"requestType" bson:"requestType"`
+	RequestType consts.HttpRequestType `json:"requestType" bson:"requestType"`
 	URL         string                 `json:"url" bson:"url"`
 	QueryParams map[string]interface{} `json:"queryParams" bson:"queryParams"`
 	Headers     map[string]string      `json:"headers" bson:"headers"`
@@ -24,6 +25,7 @@ type Status struct {
 	IsComplete       bool   `json:"isComplete" bson:"isComplete"`
 	ExceptionMessage string `json:"exceptionMessage" bson:"exceptionMessage"`
 }
+
 type TaskModel struct {
 	ID               string   `json:"_id" bson:"_id"`
 	Schedule         string   `json:"schedule" bson:"schedule"`
@@ -42,15 +44,28 @@ type TaskModel struct {
 	Status           Status   `json:"status" bson:"status"`
 }
 
-type SetEnableParams struct {
-	Enable bool `json:"enable" bson:"enable"`
+type TaskQP struct {
+	Schedule         string   `json:"schedule" bson:"schedule"`
+	Enable           bool     `json:"enable" bson:"enable"`
+	ScheduleDate     string   `json:"scheduleDate" bson:"scheduleDate"` // IST
+	ScheduleTime     string   `json:"scheduleTime" bson:"scheduleTime"` // IST
+	Recur            int      `json:"recur" bson:"recur"`
+	IsRecurEnabled   bool     `json:"isRecurEnabled" bson:"isRecurEnabled"`
+	NumberOfAttempts int      `json:"numberOfAttempts" bson:"numberOfAttempts"`
+	ExpiresAt        string   `json:"expiresAt" bson:"expiresAt"` // UTC
+	TaskData         TaskData `json:"taskData" bson:"taskData"`
+	Status           Status   `json:"status" bson:"status"`
+}
+
+type ActiveTasks struct {
+	ActiveTasks []string `json:"activeTasks"`
 }
 
 func (s *Status) IsAlreadyExecuted() bool {
 	return s.LastExecutedAt != ""
 }
 
-func (t *TaskModel) ValidateCreation() error {
+func (t *TaskQP) Validate() error {
 	ve := errors.ValidationErrs()
 
 	t.Schedule = strings.ToUpper(t.Schedule)
@@ -91,7 +106,7 @@ func (t *TaskModel) ValidateCreation() error {
 		}
 	}
 	if t.ExpiresAt == "" {
-		t.ExpiresAt = utils.GetExpiryTime()
+		t.ExpiresAt = helpers.GetExpiryTime()
 	}
 	if t.TaskData.TaskType == "" {
 		ve.Add("taskData.taskType", "cannot be empty")
@@ -112,16 +127,37 @@ func (t *TaskModel) ValidateCreation() error {
 	}
 
 	if ve.Len() == 0 {
-		StartUnix := utils.ToUnixFromISTDateTime(t.ScheduleTime, t.ScheduleDate)
-		EndUnix := utils.ToUnixFromUTCTime(t.ExpiresAt)
-		if utils.Unix(StartUnix) < utils.CurrentUTCUnix() {
+		StartUnix := helpers.ToUnixFromISTDateTime(t.ScheduleTime, t.ScheduleDate)
+		EndUnix := helpers.ToUnixFromUTCTime(t.ExpiresAt)
+		if helpers.Unix(StartUnix) < helpers.CurrentUTCUnix() {
 			ve.Add("scheduleDate and Time", "must be greater than current time")
 		}
-		if utils.Unix(EndUnix) < utils.CurrentUTCUnix() || StartUnix > EndUnix {
+		if helpers.Unix(EndUnix) < helpers.CurrentUTCUnix() || StartUnix > EndUnix {
 			ve.Add("expiresAt", "must be greater than current & schedule time")
 		}
-		t.StartUnix = StartUnix
-		t.EndUnix = EndUnix
 	}
+
 	return ve.Err()
+}
+
+func (t *TaskQP) ToTaskModel(taskID, curTime string) TaskModel {
+	startUnix := helpers.ToUnixFromISTDateTime(t.ScheduleTime, t.ScheduleDate)
+	endUnix := helpers.ToUnixFromUTCTime(t.ExpiresAt)
+	return TaskModel{
+		ID:               taskID,
+		Schedule:         t.Schedule,
+		Enable:           t.Enable,
+		ScheduleDate:     t.ScheduleDate,
+		ScheduleTime:     t.ScheduleTime,
+		Recur:            t.Recur,
+		IsRecurEnabled:   t.IsRecurEnabled,
+		NumberOfAttempts: t.NumberOfAttempts,
+		CreatedAt:        curTime,
+		UpdatedAt:        curTime,
+		ExpiresAt:        t.ExpiresAt,
+		StartUnix:        startUnix,
+		EndUnix:          endUnix,
+		TaskData:         t.TaskData,
+		Status:           t.Status,
+	}
 }

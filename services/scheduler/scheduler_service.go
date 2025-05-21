@@ -8,10 +8,10 @@ import (
 	"time"
 
 	// Local Packages
-	config "scheduler/config"
 	errors "scheduler/errors"
 	smodels "scheduler/models"
-	utils "scheduler/utils"
+	helpers "scheduler/utils/helpers"
+	slack "scheduler/utils/slack"
 
 	// External Packages
 	"github.com/google/uuid"
@@ -22,7 +22,7 @@ import (
 
 type SchedulerRepo interface {
 	GetOne(ctx context.Context, taskID string) (smodels.TaskModel, error)
-	GetActive(ctx context.Context, curUnix utils.Unix) ([]smodels.TaskModel, error)
+	GetActive(ctx context.Context, curUnix helpers.Unix) ([]smodels.TaskModel, error)
 	Insert(ctx context.Context, task smodels.TaskModel) error
 	UpdateTaskStatus(ctx context.Context, taskID, exceptionMsg string, isComplete bool) error
 	UpdateEnable(ctx context.Context, taskID string, enable bool) error
@@ -32,7 +32,7 @@ type SchedulerRepo interface {
 type SchedulerService struct {
 	logger        *zap.Logger
 	schedulerRepo SchedulerRepo
-	config        config.Config
+	slack         slack.Sender
 	cron          *cron.Cron
 	tasks         map[string]cron.EntryID
 	tasksMu       sync.Mutex
@@ -40,14 +40,14 @@ type SchedulerService struct {
 	timersMu      sync.Mutex
 }
 
-func NewSchedulerService(schedulerRepo SchedulerRepo, logger *zap.Logger, config config.Config) *SchedulerService {
+func NewSchedulerService(schedulerRepo SchedulerRepo, logger *zap.Logger, slack slack.Sender) *SchedulerService {
 	cronObj := cron.New(cron.WithSeconds(), cron.WithLocation(time.UTC))
 	tasksMap := make(map[string]cron.EntryID)
 	timersMap := make(map[string]context.CancelFunc)
 	return &SchedulerService{
 		logger:        logger,
 		schedulerRepo: schedulerRepo,
-		config:        config,
+		slack:         slack,
 		cron:          cronObj,
 		tasks:         tasksMap,
 		timers:        timersMap,
@@ -56,20 +56,36 @@ func NewSchedulerService(schedulerRepo SchedulerRepo, logger *zap.Logger, config
 
 func (s *SchedulerService) GetOne(ctx context.Context, taskID string) (*smodels.TaskModel, error) {
 	task, err := s.schedulerRepo.GetOne(ctx, taskID)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, errors.E(errors.Invalid, "task not found with given id")
+	}
 	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, errors.E(errors.Invalid, "task not found with given id")
-		}
 		return nil, fmt.Errorf("failed to fetch task data: %w", err)
 	}
+
 	return &task, nil
 }
 
-func (s *SchedulerService) Insert(ctx context.Context, task smodels.TaskModel) (string, error) {
-	task.ID = uuid.New().String()
-	currentTime := utils.GetCurrentDateTime()
-	task.CreatedAt = currentTime
-	task.UpdatedAt = currentTime
+func (s *SchedulerService) GetActive(ctx context.Context) (*smodels.ActiveTasks, error) {
+	curUnix := helpers.CurrentUTCUnix()
+	tasks, err := s.schedulerRepo.GetActive(ctx, curUnix)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch active tasks: %w", err)
+	}
+
+	res := make([]string, 0, len(tasks))
+	for _, task := range tasks {
+		res = append(res, task.ID)
+	}
+
+	activeTasks := &smodels.ActiveTasks{ActiveTasks: res}
+	return activeTasks, nil
+}
+
+func (s *SchedulerService) Insert(ctx context.Context, taskQP smodels.TaskQP) (string, error) {
+	taskID := uuid.New().String()
+	curTime := helpers.GetCurrentDateTime()
+	task := taskQP.ToTaskModel(taskID, curTime)
 	err := s.schedulerRepo.Insert(ctx, task)
 	if err != nil {
 		return "", fmt.Errorf("failed to insert task: %w", err)
@@ -79,21 +95,25 @@ func (s *SchedulerService) Insert(ctx context.Context, task smodels.TaskModel) (
 }
 
 func (s *SchedulerService) Delete(ctx context.Context, taskID string) error {
-	s.DiscardTaskNow(taskID)
 	err := s.schedulerRepo.Delete(ctx, taskID)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return errors.E(errors.Invalid, "task not found with given id")
+	}
 	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return errors.E(errors.Invalid, "task not found with given id")
-		}
 		return fmt.Errorf("failed to delete task: %w", err)
 	}
+
+	s.DiscardTaskNow(taskID)
 	return nil
 }
 
 func (s *SchedulerService) Toggle(ctx context.Context, taskID string) error {
 	task, err := s.schedulerRepo.GetOne(ctx, taskID)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return errors.E(errors.Invalid, "task not found with given id")
+	}
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to fetch task data: %w", err)
 	}
 
 	enable := !task.Enable
@@ -104,6 +124,15 @@ func (s *SchedulerService) Toggle(ctx context.Context, taskID string) error {
 
 	alreadyExecuted := task.Status.IsAlreadyExecuted()
 	if alreadyExecuted && !task.IsRecurEnabled {
+		if enable {
+			s.logger.Info(fmt.Sprintf("Task %s[NR] Is Already Executed Successfully", taskID))
+		}
+		return nil
+	}
+
+	curUnix := helpers.CurrentUTCUnix()
+	if curUnix > helpers.Unix(task.EndUnix) {
+		s.logger.Info(fmt.Sprintf("Task %s Is Already Expired", taskID))
 		return nil
 	}
 
@@ -112,5 +141,30 @@ func (s *SchedulerService) Toggle(ctx context.Context, taskID string) error {
 	} else {
 		s.DiscardTaskNow(taskID)
 	}
+	return nil
+}
+
+func (s *SchedulerService) ExecuteNow(ctx context.Context, taskID string) error {
+	task, err := s.schedulerRepo.GetOne(ctx, taskID)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return errors.E(errors.Invalid, "task not found with given id")
+	}
+	if err != nil {
+		return fmt.Errorf("failed to fetch task data: %w", err)
+	}
+
+	alreadyExecuted := task.Status.IsAlreadyExecuted()
+	if alreadyExecuted && !task.IsRecurEnabled {
+		s.logger.Info(fmt.Sprintf("Task %s[NR] Is Already Executed Successfully", taskID))
+		return nil
+	}
+
+	curUnix := helpers.CurrentUTCUnix()
+	if curUnix > helpers.Unix(task.EndUnix) {
+		s.logger.Info(fmt.Sprintf("Task %s Is Already Expired", taskID))
+		return nil
+	}
+
+	s.ExecuteTaskNow(task)
 	return nil
 }

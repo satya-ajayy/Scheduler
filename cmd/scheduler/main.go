@@ -15,6 +15,7 @@ import (
 	mongodb "scheduler/repositories/mongodb"
 	health "scheduler/services/health"
 	scheduler "scheduler/services/scheduler"
+	slack "scheduler/utils/slack"
 
 	// External Packages
 	"github.com/alecthomas/kingpin/v2"
@@ -35,15 +36,18 @@ func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) 
 		return nil, err
 	}
 
+	// Slack Alert Sender
+	slackAlerter := slack.NewSender(k.Slack, k.IsProdMode)
+
 	// Init repos, services && handlers
 	schedulerRepo := mongodb.NewSchedulerRepository(mongoClient)
-	schedulerSvc := scheduler.NewSchedulerService(schedulerRepo, logger, k)
+	schedulerSvc := scheduler.NewSchedulerService(schedulerRepo, logger, slackAlerter)
 
 	err = schedulerSvc.Start(ctx)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	healthSvc := health.NewService(logger, mongoClient)
 	schedulerHandler := handlers.NewSchedulerHandler(schedulerSvc)
 	server := shttp.NewServer(k.Prefix, logger, healthSvc, schedulerHandler)

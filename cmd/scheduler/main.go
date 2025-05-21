@@ -25,6 +25,7 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/rawbytes"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // InitializeServer sets up an HTTP server with defined handlers. Repositories are initialized,
@@ -93,6 +94,7 @@ func main() {
 	cfg.Encoding = "logfmt"
 	_ = cfg.Level.UnmarshalText([]byte(appKonf.Logger.Level))
 	cfg.InitialFields = make(map[string]any)
+	cfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	cfg.InitialFields["host"], _ = os.Hostname()
 	cfg.InitialFields["service"] = appKonf.Application
 	cfg.OutputPaths = []string{"stdout"}

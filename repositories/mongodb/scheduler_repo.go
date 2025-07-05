@@ -102,3 +102,33 @@ func (r *SchedulerRepository) UpdateTaskStatus(ctx context.Context, taskID, exce
 	_, err := collection.UpdateOne(ctx, filter, updateData)
 	return err
 }
+
+func (r *SchedulerRepository) Clean(ctx context.Context) error {
+	collection := r.client.Database("mybase").Collection(r.collection)
+	curUnix := helpers.CurrentUTCUnix()
+	filter := bson.M{
+		"$and": []bson.M{
+			{
+				"$or": []bson.M{
+					{"enable": false},                   // Disabled
+					{"endUnix": bson.M{"$lt": curUnix}}, // Expired
+					{ // Not recurring and has already executed
+						"$and": []bson.M{
+							{"isRecurEnabled": false},
+							{"status.lastExecutedAt": bson.M{"$ne": ""}},
+						},
+					},
+				},
+			},
+			{
+				"createdAt": bson.M{"$lt": helpers.GetPrevTime()},
+			},
+		},
+	}
+
+	_, err := collection.DeleteMany(ctx, filter)
+	if err != nil {
+		return err
+	}
+	return nil
+}

@@ -6,6 +6,7 @@ require (
 	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/go-chi/chi/v5 v5.2.1
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/schema v1.4.1
 	github.com/jsternberg/zap-logfmt v1.3.0
 	github.com/knadh/koanf v1.5.0
 	github.com/robfig/cron/v3 v3.0.1

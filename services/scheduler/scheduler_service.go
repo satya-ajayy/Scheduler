@@ -27,6 +27,7 @@ type SchedulerRepo interface {
 	UpdateTaskStatus(ctx context.Context, taskID, exceptionMsg string, isComplete bool) error
 	UpdateEnable(ctx context.Context, taskID string, enable bool) error
 	Delete(ctx context.Context, taskID string) error
+	Clean(ctx context.Context) error
 }
 
 type SchedulerService struct {
@@ -166,5 +167,13 @@ func (s *SchedulerService) ExecuteNow(ctx context.Context, taskID string) error 
 	}
 
 	s.ExecuteTaskNow(task)
+	return nil
+}
+
+func (s *SchedulerService) Clean(ctx context.Context) error {
+	err := s.schedulerRepo.Clean(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to clean tasks: %w", err)
+	}
 	return nil
 }

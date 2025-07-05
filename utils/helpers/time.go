@@ -7,10 +7,14 @@ func GetCurrentDateTime() string {
 	return utcTime.Format("2006-01-02T15:04:05.999Z")
 }
 
+func GetPrevTime() string {
+	oneYearAgo := time.Now().UTC().AddDate(-1, 0, 0)
+	return oneYearAgo.Format("2006-01-02T15:04:05.999Z")
+}
+
 func GetExpiryTime() string {
-	currentUTC := time.Now().UTC()
-	futureUTC := currentUTC.AddDate(10, 0, 0)
-	return futureUTC.Format("2006-01-02T15:04:05.999Z")
+	tenYearsFromNow := time.Now().UTC().AddDate(10, 0, 0)
+	return tenYearsFromNow.Format("2006-01-02T15:04:05.999Z")
 }
 
 type Unix int64

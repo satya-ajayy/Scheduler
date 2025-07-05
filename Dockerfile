@@ -12,7 +12,7 @@ RUN go build -o /usr/local/bin/scheduler ./cmd/scheduler
 
 # runner image with shell (alpine)
 FROM alpine:latest
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata curl
 
 WORKDIR /app
 COPY --from=base /usr/local/bin/scheduler scheduler

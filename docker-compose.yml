@@ -1,6 +1,6 @@
 services:
   mongo:
-    image: mongo:4.4.21
+    image: mongo:8.0.10
     restart: always
     network_mode: host
     volumes:

@@ -19,6 +19,7 @@ type SchedulerService interface {
 	Delete(ctx context.Context, taskID string) error
 	Toggle(ctx context.Context, taskID string) error
 	ExecuteNow(ctx context.Context, taskID string) error
+	Clean(ctx context.Context) error
 }
 
 type SchedulerHandler struct {
@@ -108,6 +109,16 @@ func (h *SchedulerHandler) Execute(w http.ResponseWriter, r *http.Request) (resp
 	if err == nil {
 		return map[string]interface{}{
 			"message": fmt.Sprintf("Executed Task With ID: %s", taskID),
+		}, http.StatusOK, nil
+	}
+	return
+}
+
+func (h *SchedulerHandler) Clean(w http.ResponseWriter, r *http.Request) (response any, status int, err error) {
+	err = h.schedulerService.Clean(r.Context())
+	if err == nil {
+		return map[string]interface{}{
+			"message": fmt.Sprintf("Tasks Cleaning Successfull"),
 		}, http.StatusOK, nil
 	}
 	return

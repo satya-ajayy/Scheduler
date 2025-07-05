@@ -45,8 +45,8 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Recoverer)
 	r.Use(smiddleware.HTTPMiddleware(s.logger))
+	r.Use(middleware.Recoverer)
 
 	r.Route(s.prefix, func(r chi.Router) {
 		r.Route("/v1", func(r chi.Router) {
@@ -63,6 +63,7 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 				r.Route("/helpers", func(r chi.Router) {
 					r.Get("/active-tasks", s.ToHTTPHandlerFunc(s.scheduler.GetActive))
 					r.Post("/execute-task", s.ToHTTPHandlerFunc(s.scheduler.Execute))
+					r.Delete("/clean-tasks", s.ToHTTPHandlerFunc(s.scheduler.Clean))
 				})
 			})
 		})
@@ -91,12 +92,12 @@ func (s *Server) ToHTTPHandlerFunc(handler func(w http.ResponseWriter, r *http.R
 	return func(w http.ResponseWriter, r *http.Request) {
 		response, status, err := handler(w, r)
 		if err != nil {
-			var errFromHandler *errors.Error
+			var typedErr *errors.Error
 			switch {
-			case errors.As(err, &errFromHandler):
-				resp.RespondError(w, errFromHandler)
+			case errors.As(err, &typedErr):
+				resp.RespondError(w, typedErr)
 			default:
-				s.logger.Error("internal error", zap.Error(errFromHandler))
+				s.logger.Error("internal error", zap.Error(err))
 				resp.RespondMessage(w, http.StatusInternalServerError, "internal error")
 			}
 			return

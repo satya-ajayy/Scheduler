@@ -15,15 +15,20 @@ import (
 
 type SchedulerRepository struct {
 	client     *mongo.Client
+	database   string
 	collection string
 }
 
 func NewSchedulerRepository(client *mongo.Client) *SchedulerRepository {
-	return &SchedulerRepository{client: client, collection: "scheduling_tasks"}
+	return &SchedulerRepository{
+		client:     client,
+		database:   "scheduler",
+		collection: "tasks",
+	}
 }
 
 func (r *SchedulerRepository) GetOne(ctx context.Context, taskID string) (smodels.TaskModel, error) {
-	collection := r.client.Database("mybase").Collection(r.collection)
+	collection := r.client.Database(r.database).Collection(r.collection)
 	filter := bson.M{"_id": taskID}
 	var result smodels.TaskModel
 	err := collection.FindOne(ctx, filter).Decode(&result)
@@ -31,7 +36,7 @@ func (r *SchedulerRepository) GetOne(ctx context.Context, taskID string) (smodel
 }
 
 func (r *SchedulerRepository) GetActive(ctx context.Context, curUnix helpers.Unix) ([]smodels.TaskModel, error) {
-	collection := r.client.Database("mybase").Collection(r.collection)
+	collection := r.client.Database(r.database).Collection(r.collection)
 	filter := bson.M{
 		"enable":  true,
 		"endUnix": bson.M{"$gte": curUnix},
@@ -56,7 +61,7 @@ func (r *SchedulerRepository) GetActive(ctx context.Context, curUnix helpers.Uni
 }
 
 func (r *SchedulerRepository) Insert(ctx context.Context, task smodels.TaskModel) error {
-	collection := r.client.Database("mybase").Collection(r.collection)
+	collection := r.client.Database(r.database).Collection(r.collection)
 	_, err := collection.InsertOne(ctx, task)
 	if err != nil {
 		return err
@@ -65,7 +70,7 @@ func (r *SchedulerRepository) Insert(ctx context.Context, task smodels.TaskModel
 }
 
 func (r *SchedulerRepository) UpdateEnable(ctx context.Context, taskID string, enable bool) error {
-	collection := r.client.Database("mybase").Collection(r.collection)
+	collection := r.client.Database(r.database).Collection(r.collection)
 	filter := bson.M{"_id": taskID}
 	currTime := helpers.GetCurrentDateTime()
 	updatedFields := bson.M{"$set": bson.M{"enable": enable, "updatedAt": currTime}}
@@ -77,7 +82,7 @@ func (r *SchedulerRepository) UpdateEnable(ctx context.Context, taskID string, e
 }
 
 func (r *SchedulerRepository) Delete(ctx context.Context, taskID string) error {
-	collection := r.client.Database("mybase").Collection(r.collection)
+	collection := r.client.Database(r.database).Collection(r.collection)
 	filter := bson.M{"_id": taskID}
 	res, err := collection.DeleteOne(ctx, filter)
 	if err != nil {
@@ -90,7 +95,7 @@ func (r *SchedulerRepository) Delete(ctx context.Context, taskID string) error {
 }
 
 func (r *SchedulerRepository) UpdateTaskStatus(ctx context.Context, taskID, exceptionMsg string, isComplete bool) error {
-	collection := r.client.Database("mybase").Collection(r.collection)
+	collection := r.client.Database(r.database).Collection(r.collection)
 	filter := bson.M{"_id": taskID}
 	updateData := bson.M{
 		"$set": bson.M{
@@ -104,7 +109,7 @@ func (r *SchedulerRepository) UpdateTaskStatus(ctx context.Context, taskID, exce
 }
 
 func (r *SchedulerRepository) Clean(ctx context.Context) error {
-	collection := r.client.Database("mybase").Collection(r.collection)
+	collection := r.client.Database(r.database).Collection(r.collection)
 	curUnix := helpers.CurrentUTCUnix()
 	filter := bson.M{
 		"$and": []bson.M{

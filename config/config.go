@@ -52,24 +52,19 @@ type Slack struct {
 func (c *Config) Validate() error {
 	ve := errors.ValidationErrs()
 
-	if c.Application == "" {
-		ve.Add("application", "cannot be empty")
-	}
-	if c.Listen == "" {
-		ve.Add("listen", "cannot be empty")
-	}
-	if c.Logger.Level == "" {
-		ve.Add("logger.level", "cannot be empty")
-	}
-	if c.Prefix == "" {
-		ve.Add("prefix", "cannot be empty")
-	}
-	if c.Mongo.URI == "" {
-		ve.Add("mongo.uri", "cannot be empty")
-	}
-	if c.Slack.WebhookURL == "" {
-		ve.Add("slack.webhook_url", "cannot be empty")
-	}
+	// Required Fields
+	validateRequiredString(ve, "application", c.Application)
+	validateRequiredString(ve, "listen", c.Listen)
+	validateRequiredString(ve, "logger.level", c.Logger.Level)
+	validateRequiredString(ve, "prefix", c.Prefix)
+	validateRequiredString(ve, "mongo.uri", c.Mongo.URI)
+	validateRequiredString(ve, "slack.webhook_url", c.Slack.WebhookURL)
 
 	return ve.Err()
+}
+
+func validateRequiredString(ve *errors.ValidationErrorBuilder, field, value string) {
+	if value == "" {
+		ve.Add(field, "cannot be empty")
+	}
 }

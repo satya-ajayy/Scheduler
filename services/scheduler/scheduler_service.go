@@ -27,7 +27,6 @@ type SchedulerRepo interface {
 	UpdateTaskStatus(ctx context.Context, taskID, exceptionMsg string, isComplete bool) error
 	UpdateEnable(ctx context.Context, taskID string, enable bool) error
 	Delete(ctx context.Context, taskID string) error
-	Clean(ctx context.Context) error
 }
 
 type SchedulerService struct {
@@ -41,7 +40,7 @@ type SchedulerService struct {
 	timersMu      sync.Mutex
 }
 
-func NewSchedulerService(schedulerRepo SchedulerRepo, logger *zap.Logger, slack slack.Sender) *SchedulerService {
+func NewSchedulerService(logger *zap.Logger, schedulerRepo SchedulerRepo, slack slack.Sender) *SchedulerService {
 	cronObj := cron.New(cron.WithSeconds(), cron.WithLocation(time.UTC))
 	tasksMap := make(map[string]cron.EntryID)
 	timersMap := make(map[string]context.CancelFunc)
@@ -167,13 +166,5 @@ func (s *SchedulerService) ExecuteNow(ctx context.Context, taskID string) error 
 	}
 
 	s.ExecuteTaskNow(task)
-	return nil
-}
-
-func (s *SchedulerService) Clean(ctx context.Context) error {
-	err := s.schedulerRepo.Clean(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to clean tasks: %w", err)
-	}
 	return nil
 }

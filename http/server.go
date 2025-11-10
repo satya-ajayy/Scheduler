@@ -28,15 +28,15 @@ type Server struct {
 }
 
 func NewServer(
-	prefix string,
 	logger *zap.Logger,
-	healthCheckService *health.HealthCheckService,
+	prefix string,
+	health *health.HealthCheckService,
 	scheduler *handlers.SchedulerHandler,
 ) *Server {
 	return &Server{
 		prefix:    prefix,
 		logger:    logger,
-		health:    healthCheckService,
+		health:    health,
 		scheduler: scheduler,
 	}
 }
@@ -63,7 +63,6 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 				r.Route("/helpers", func(r chi.Router) {
 					r.Get("/active-tasks", s.ToHTTPHandlerFunc(s.scheduler.GetActive))
 					r.Post("/execute-task", s.ToHTTPHandlerFunc(s.scheduler.Execute))
-					r.Delete("/clean-tasks", s.ToHTTPHandlerFunc(s.scheduler.Clean))
 				})
 			})
 		})

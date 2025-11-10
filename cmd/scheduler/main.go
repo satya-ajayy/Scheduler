@@ -10,7 +10,7 @@ import (
 
 	// Local Packages
 	config "scheduler/config"
-	shttp "scheduler/http"
+	http "scheduler/http"
 	handlers "scheduler/http/handlers"
 	mongodb "scheduler/repositories/mongodb"
 	health "scheduler/services/health"
@@ -30,7 +30,7 @@ import (
 
 // InitializeServer sets up an HTTP server with defined handlers. Repositories are initialized,
 // create the services, and subsequently construct handlers for the services
-func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) (*shttp.Server, error) {
+func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) (*http.Server, error) {
 	// Connect to mongodb
 	mongoClient, err := mongodb.Connect(ctx, k.Mongo.URI)
 	if err != nil {
@@ -42,16 +42,16 @@ func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) 
 
 	// Init repos, services && handlers
 	schedulerRepo := mongodb.NewSchedulerRepository(mongoClient)
-	schedulerSvc := scheduler.NewSchedulerService(schedulerRepo, logger, slackAlerter)
+	healthSvc := health.NewService(logger, mongoClient)
+	schedulerSvc := scheduler.NewSchedulerService(logger, schedulerRepo, slackAlerter)
 
 	err = schedulerSvc.Start(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	healthSvc := health.NewService(logger, mongoClient)
 	schedulerHandler := handlers.NewSchedulerHandler(schedulerSvc)
-	server := shttp.NewServer(k.Prefix, logger, healthSvc, schedulerHandler)
+	server := http.NewServer(logger, k.Prefix, healthSvc, schedulerHandler)
 	return server, nil
 }
 

@@ -3,6 +3,7 @@ package config
 import (
 	// Local Packages
 	errors "scheduler/errors"
+	helpers "scheduler/utils/helpers"
 )
 
 var DefaultConfig = []byte(`
@@ -53,18 +54,12 @@ func (c *Config) Validate() error {
 	ve := errors.ValidationErrs()
 
 	// Required Fields
-	validateRequiredString(ve, "application", c.Application)
-	validateRequiredString(ve, "listen", c.Listen)
-	validateRequiredString(ve, "logger.level", c.Logger.Level)
-	validateRequiredString(ve, "prefix", c.Prefix)
-	validateRequiredString(ve, "mongo.uri", c.Mongo.URI)
-	validateRequiredString(ve, "slack.webhook_url", c.Slack.WebhookURL)
+	helpers.ValidateRequiredString(ve, "application", c.Application)
+	helpers.ValidateRequiredString(ve, "listen", c.Listen)
+	helpers.ValidateRequiredString(ve, "logger.level", c.Logger.Level)
+	helpers.ValidateRequiredString(ve, "prefix", c.Prefix)
+	helpers.ValidateRequiredString(ve, "mongo.uri", c.Mongo.URI)
+	helpers.ValidateRequiredString(ve, "slack.webhook_url", c.Slack.WebhookURL)
 
 	return ve.Err()
-}
-
-func validateRequiredString(ve *errors.ValidationErrorBuilder, field, value string) {
-	if value == "" {
-		ve.Add(field, "cannot be empty")
-	}
 }

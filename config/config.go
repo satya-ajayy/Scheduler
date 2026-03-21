@@ -10,6 +10,7 @@ var DefaultConfig = []byte(`
 application: "scheduler"
 
 logger:
+  encoding: "logfmt"
   level: "debug"
 
 listen: ":4202"
@@ -37,7 +38,8 @@ type Config struct {
 }
 
 type Logger struct {
-	Level string `koanf:"level"`
+	Level    string `koanf:"level"`
+	Encoding string `koanf:"encoding"`
 }
 
 type Mongo struct {

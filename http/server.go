@@ -21,6 +21,7 @@ import (
 
 // Server struct follows the alphabet order
 type Server struct {
+	close     func()
 	health    *health.HealthCheckService
 	logger    *zap.Logger
 	prefix    string
@@ -32,11 +33,13 @@ func NewServer(
 	prefix string,
 	health *health.HealthCheckService,
 	scheduler *handlers.SchedulerHandler,
+	close func(),
 ) *Server {
 	return &Server{
-		prefix:    prefix,
-		logger:    logger,
+		close:     close,
 		health:    health,
+		logger:    logger,
+		prefix:    prefix,
 		scheduler: scheduler,
 	}
 }
@@ -81,7 +84,13 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		return server.Shutdown(shutdownCtx)
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return err
+		}
+		if s.close != nil {
+			s.close()
+		}
+		return nil
 	}
 }
 

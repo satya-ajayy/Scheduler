@@ -15,6 +15,7 @@ import (
 	mongodb "scheduler/repositories/mongodb"
 	health "scheduler/services/health"
 	scheduler "scheduler/services/scheduler"
+	helpers "scheduler/utils/helpers"
 	slack "scheduler/utils/slack"
 
 	// External Packages
@@ -51,54 +52,68 @@ func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) 
 	}
 
 	schedulerHandler := handlers.NewSchedulerHandler(schedulerSvc)
-	server := http.NewServer(logger, k.Prefix, healthSvc, schedulerHandler)
+	closeCallback := func() {
+		_ = mongoClient.Disconnect(ctx)
+		logger.Info("Server Stopped Successfully!")
+	}
+
+	server := http.NewServer(logger, k.Prefix, healthSvc, schedulerHandler, closeCallback)
 	return server, nil
 }
 
 // LoadConfig loads the default configuration and overrides it with the config file
 // specified by the path defined in the config flag
 func LoadConfig() *koanf.Koanf {
-	configPathMsg := "Path to the application config file"
-	configPath := kingpin.Flag("config", configPathMsg).Short('c').Default("config.yml").String()
+	configPath := kingpin.Flag("config", "Path To The Application Config File").
+		Short('c').Default("config.yml").String()
 
 	kingpin.Parse()
+
 	k := koanf.New(".")
 	_ = k.Load(rawbytes.Provider(config.DefaultConfig), yaml.Parser())
 	if *configPath != "" {
 		_ = k.Load(file.Provider(*configPath), yaml.Parser())
 	}
-
 	return k
 }
 
+// NewLogger builds a production zap logger configured with logfmt encoding
+// and the application's hostname and service name as initial fields.
+func NewLogger(cfg config.Config) *zap.Logger {
+	zapCfg := zap.NewProductionConfig()
+	zapCfg.Encoding = cfg.Logger.Encoding
+	_ = zapCfg.Level.UnmarshalText([]byte(cfg.Logger.Level))
+	zapCfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	zapCfg.OutputPaths = []string{"stdout"}
+
+	hostname, _ := os.Hostname()
+	zapCfg.InitialFields = map[string]any{
+		"host":    hostname,
+		"service": cfg.Application,
+	}
+
+	logger, _ := zapCfg.Build()
+	return logger
+}
+
+// main is the entrypoint that loads config, sets up logging,
+// and starts the HTTP server with graceful shutdown.
 func main() {
 	k := LoadConfig()
+
+	// Unmarshal config into struct
 	appKonf := config.Config{}
-
-	// Unmarshalling config into struct
-	err := k.Unmarshal("", &appKonf)
-	if err != nil {
-		log.Fatalf("Error loading config: %v", err)
+	if err := k.Unmarshal("", &appKonf); err != nil {
+		log.Fatalf("Error Loading Config: %v", err)
 	}
 
-	// Validate the config loaded
-	if err = appKonf.Validate(); err != nil {
-		log.Fatalf("Invalid configuration: %v", err)
+	// Validate the config
+	if err := appKonf.Validate(); err != nil {
+		helpers.LogValidationErrors(err)
+		log.Fatalf("Invalid Configuration!")
 	}
 
-	if !appKonf.IsProdMode {
-		k.Print()
-	}
-
-	cfg := zap.NewProductionConfig()
-	cfg.Encoding = "logfmt"
-	_ = cfg.Level.UnmarshalText([]byte(appKonf.Logger.Level))
-	cfg.InitialFields = make(map[string]any)
-	cfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	cfg.InitialFields["host"], _ = os.Hostname()
-	cfg.InitialFields["service"] = appKonf.Application
-	cfg.OutputPaths = []string{"stdout"}
-	logger, _ := cfg.Build()
+	logger := NewLogger(appKonf)
 	defer func() {
 		_ = logger.Sync()
 	}()
@@ -108,10 +123,10 @@ func main() {
 
 	srv, err := InitializeServer(ctx, appKonf, logger)
 	if err != nil {
-		logger.Fatal("Cannot initialize server", zap.Error(err))
+		logger.Fatal("Cannot Initialize Server!", zap.Error(err))
 	}
 
 	if err = srv.Listen(ctx, appKonf.Listen); err != nil {
-		logger.Fatal("Cannot listen", zap.Error(err))
+		logger.Fatal("Cannot Listen On Port!", zap.Error(err))
 	}
 }

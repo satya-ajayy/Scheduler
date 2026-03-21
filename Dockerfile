@@ -1,5 +1,5 @@
 # base image
-FROM golang:1.23.3-alpine as base
+FROM golang:1.25.0-alpine AS base
 WORKDIR /scheduler
 
 ENV CGO_ENABLED=0
@@ -11,7 +11,7 @@ ADD . .
 RUN go build -o /usr/local/bin/scheduler ./cmd/scheduler
 
 # runner image with shell (alpine)
-FROM alpine:latest
+FROM alpine:3.21.0 AS runner
 RUN apk add --no-cache tzdata curl
 
 WORKDIR /app

@@ -11,8 +11,8 @@ import (
 	"go.uber.org/zap"
 )
 
-// HTTPMiddleware creates a middleware that logs HTTP requests using zap
-func HTTPMiddleware(logger *zap.Logger) func(next http.Handler) http.Handler {
+// RequestLogger creates a middleware that logs HTTP requests using zap
+func RequestLogger(logger *zap.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Start tracking request duration and set up response logging
@@ -46,7 +46,7 @@ func HTTPMiddleware(logger *zap.Logger) func(next http.Handler) http.Handler {
 func IsDebugLog(r *http.Request) bool {
 	paths := []string{"/health", "/metrics"}
 	for _, path := range paths {
-		if strings.Contains(r.URL.Path, path) {
+		if strings.HasSuffix(r.URL.Path, path) {
 			return true
 		}
 	}

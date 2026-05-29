@@ -48,7 +48,7 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(smiddleware.HTTPMiddleware(s.logger))
+	r.Use(smiddleware.RequestLogger(s.logger))
 	r.Use(middleware.Recoverer)
 
 	r.Route(s.prefix, func(r chi.Router) {
@@ -71,10 +71,10 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 		})
 	})
 
-	errch := make(chan error)
+	errch := make(chan error, 1)
 	server := &http.Server{Addr: addr, Handler: r}
 	go func() {
-		s.logger.Info("Starting server", zap.String("addr", addr))
+		s.logger.Info("Starting Server", zap.String("addr", addr))
 		errch <- server.ListenAndServe()
 	}()
 
@@ -82,7 +82,7 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 	case err := <-errch:
 		return err
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			return err
@@ -105,15 +105,14 @@ func (s *Server) ToHTTPHandlerFunc(handler func(w http.ResponseWriter, r *http.R
 			case errors.As(err, &typedErr):
 				resp.RespondError(w, typedErr)
 			default:
-				s.logger.Error("internal error", zap.Error(err))
+				s.logger.Error("Internal Error", zap.Error(err))
 				resp.RespondMessage(w, http.StatusInternalServerError, "internal error")
 			}
 			return
 		}
 		if response != nil {
 			resp.RespondJSON(w, status, response)
-		}
-		if status >= 100 && status < 600 {
+		} else if status >= 100 && status < 600 {
 			w.WriteHeader(status)
 		}
 	}

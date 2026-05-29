@@ -4,7 +4,6 @@ import (
 	// Go Internal Packages
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	// Local Packages
@@ -53,8 +52,9 @@ func (h *SchedulerHandler) Insert(w http.ResponseWriter, r *http.Request) (respo
 
 	taskID, err := h.schedulerService.Insert(r.Context(), taskQP)
 	if err == nil {
-		return map[string]interface{}{
-			"message": fmt.Sprintf("Created Task With ID: %s", taskID),
+		return map[string]any{
+			"message": "Task Created Successfully",
+			"taskId":  taskID,
 		}, http.StatusCreated, nil
 	}
 	return
@@ -68,8 +68,9 @@ func (h *SchedulerHandler) Delete(w http.ResponseWriter, r *http.Request) (respo
 
 	err = h.schedulerService.Delete(r.Context(), taskID)
 	if err == nil {
-		return map[string]interface{}{
-			"message": fmt.Sprintf("Deleted Task With ID: %s", taskID),
+		return map[string]any{
+			"message": "Task Deleted Successfully",
+			"taskId":  taskID,
 		}, http.StatusOK, nil
 	}
 	return
@@ -83,8 +84,9 @@ func (h *SchedulerHandler) Toggle(w http.ResponseWriter, r *http.Request) (respo
 
 	err = h.schedulerService.Toggle(r.Context(), taskID)
 	if err == nil {
-		return map[string]interface{}{
-			"message": fmt.Sprintf("Toggled Task With ID: %s", taskID),
+		return map[string]any{
+			"message": "Task Toggled Successfully",
+			"taskId":  taskID,
 		}, http.StatusOK, nil
 	}
 	return
@@ -106,8 +108,9 @@ func (h *SchedulerHandler) Execute(w http.ResponseWriter, r *http.Request) (resp
 
 	err = h.schedulerService.ExecuteNow(r.Context(), taskID)
 	if err == nil {
-		return map[string]interface{}{
-			"message": fmt.Sprintf("Executed Task With ID: %s", taskID),
+		return map[string]any{
+			"message": "Task Executed Successfully",
+			"taskId":  taskID,
 		}, http.StatusOK, nil
 	}
 	return

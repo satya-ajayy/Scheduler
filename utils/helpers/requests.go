@@ -3,6 +3,7 @@ package helpers
 import (
 	// Go Internal Packages
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,14 +12,16 @@ import (
 	"time"
 
 	// Local Packages
-	consts "scheduler/utils/constants"
+	constants "scheduler/utils/constants"
 )
 
-func CallAPI(apiURL string, requestType consts.HttpRequestType, body interface{}, headers map[string]string, queryParams map[string]interface{}) (*http.Response, error) {
+var httpClient = &http.Client{Timeout: 3 * time.Minute}
+
+func CallAPI(ctx context.Context, apiURL string, requestType constants.HttpRequestType, body any, headers map[string]string, queryParams map[string]any) (*http.Response, error) {
 	// Parse URL and add query parameters
 	reqURL, err := url.Parse(apiURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse URL: %v", err)
+		return nil, fmt.Errorf("failed to parse URL: %w", err)
 	}
 	q := reqURL.Query()
 	for key, value := range queryParams {
@@ -30,7 +33,7 @@ func CallAPI(apiURL string, requestType consts.HttpRequestType, body interface{}
 		case bool:
 			q.Set(key, strconv.FormatBool(v))
 		default:
-			return nil, fmt.Errorf("unsupported type for key %s", key)
+			return nil, fmt.Errorf("unsupported query param type for key %s", key)
 		}
 	}
 	reqURL.RawQuery = q.Encode()
@@ -40,14 +43,14 @@ func CallAPI(apiURL string, requestType consts.HttpRequestType, body interface{}
 	if body != nil {
 		reqBody, err = json.Marshal(body)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal JSON: %v", err)
+			return nil, fmt.Errorf("failed to marshal request body: %w", err)
 		}
 	}
 
 	// Create the request
-	req, err := http.NewRequest(requestType.String(), reqURL.String(), bytes.NewBuffer(reqBody))
+	req, err := http.NewRequestWithContext(ctx, requestType.String(), reqURL.String(), bytes.NewBuffer(reqBody))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Add headers
@@ -56,11 +59,5 @@ func CallAPI(apiURL string, requestType consts.HttpRequestType, body interface{}
 	}
 
 	// Send request
-	client := &http.Client{Timeout: 3 * time.Minute}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %v", err)
-	}
-	defer resp.Body.Close()
-	return resp, nil
+	return httpClient.Do(req)
 }

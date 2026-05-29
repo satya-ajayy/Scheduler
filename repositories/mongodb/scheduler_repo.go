@@ -9,17 +9,17 @@ import (
 	helpers "scheduler/utils/helpers"
 
 	// External Packages
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 type SchedulerRepository struct {
-	client     *mongo.Client
+	client     *Client
 	database   string
 	collection string
 }
 
-func NewSchedulerRepository(client *mongo.Client) *SchedulerRepository {
+func NewSchedulerRepository(client *Client) *SchedulerRepository {
 	return &SchedulerRepository{
 		client:     client,
 		database:   "scheduler",
@@ -49,6 +49,8 @@ func (r *SchedulerRepository) GetActive(ctx context.Context, curUnix helpers.Uni
 	if err != nil {
 		return nil, err
 	}
+	defer cursor.Close(ctx)
+
 	var result []smodels.TaskModel
 	for cursor.Next(ctx) {
 		var task smodels.TaskModel
@@ -57,16 +59,16 @@ func (r *SchedulerRepository) GetActive(ctx context.Context, curUnix helpers.Uni
 		}
 		result = append(result, task)
 	}
+	if err = cursor.Err(); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
 func (r *SchedulerRepository) Insert(ctx context.Context, task smodels.TaskModel) error {
 	collection := r.client.Database(r.database).Collection(r.collection)
 	_, err := collection.InsertOne(ctx, task)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (r *SchedulerRepository) UpdateEnable(ctx context.Context, taskID string, enable bool) error {
@@ -75,10 +77,7 @@ func (r *SchedulerRepository) UpdateEnable(ctx context.Context, taskID string, e
 	currTime := helpers.GetCurrentDateTime()
 	updatedFields := bson.M{"$set": bson.M{"enable": enable, "updatedAt": currTime}}
 	_, err := collection.UpdateOne(ctx, filter, updatedFields)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (r *SchedulerRepository) Delete(ctx context.Context, taskID string) error {

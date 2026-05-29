@@ -13,6 +13,11 @@ import (
 	"github.com/gorilla/schema"
 )
 
+var (
+	reSpecialChars      = regexp.MustCompile(`\W`)
+	reWhitespaceEscaped = regexp.MustCompile(`\\ `)
+)
+
 // Pass is an empty placeholder for no-op
 func Pass() {
 	// do nothing
@@ -29,14 +34,12 @@ func MD5(text string) string {
 
 // EscapeSpecialChars replaces special characters in a string with "\\" + the character
 func EscapeSpecialChars(input string) string {
-	re := regexp.MustCompile(`\W`)
-	return re.ReplaceAllString(input, "\\$0")
+	return reSpecialChars.ReplaceAllString(input, "\\$0")
 }
 
-// ReplaceWhitespaceWithPipe replaces whitespace with a pipe character
+// ReplaceWhitespaceWithPipe replaces escaped whitespace with a pipe character
 func ReplaceWhitespaceWithPipe(text string) string {
-	re := regexp.MustCompile(`\\ `)
-	return re.ReplaceAllString(text, "|")
+	return reWhitespaceEscaped.ReplaceAllString(text, "|")
 }
 
 // PrintStruct prints a given struct in pretty format with indent
@@ -61,12 +64,11 @@ func GetSchemaDecoder() *schema.Decoder {
 	return d
 }
 
-func UnmarshalInterface(res interface{}, mp map[string]interface{}, key string) error {
+func UnmarshalInterface(res any, mp map[string]any, key string) error {
 	if a, ok := mp[key]; ok {
-		Bytes, _ := json.Marshal(a)
-		err := json.Unmarshal(Bytes, res)
-		if err != nil {
-			return fmt.Errorf("error occurred when unmarshalling key %s: %v", key, err)
+		b, _ := json.Marshal(a)
+		if err := json.Unmarshal(b, res); err != nil {
+			return fmt.Errorf("error occurred when unmarshalling key %s: %w", key, err)
 		}
 	}
 	return nil

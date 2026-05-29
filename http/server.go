@@ -47,7 +47,6 @@ func NewServer(
 func (s *Server) Listen(ctx context.Context, addr string) error {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
 	r.Use(smiddleware.RequestLogger(s.logger))
 	r.Use(middleware.Recoverer)
 

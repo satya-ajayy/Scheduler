@@ -100,7 +100,7 @@ func (s *SchedulerService) Delete(ctx context.Context, taskID string) error {
 	return nil
 }
 
-func (s *SchedulerService) Toggle(ctx context.Context, taskID string) error {
+func (s *SchedulerService) Enable(ctx context.Context, taskID string) error {
 	task, err := s.schedulerRepo.GetOne(ctx, taskID)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return errors.E(errors.NotFound, "task not found with given id")
@@ -109,17 +109,19 @@ func (s *SchedulerService) Toggle(ctx context.Context, taskID string) error {
 		return fmt.Errorf("failed to fetch task data: %w", err)
 	}
 
-	enable := !task.Enable
-	if err = s.schedulerRepo.UpdateEnable(ctx, taskID, enable); err != nil {
+	if task.Enable {
+		s.logger.Info("Task Is Already Enabled", zap.String("taskId", taskID))
+		return nil
+	}
+
+	if err = s.schedulerRepo.UpdateEnable(ctx, taskID, true); err != nil {
 		return fmt.Errorf("failed to update enable status: %w", err)
 	}
 
 	alreadyExecuted := task.Status.IsAlreadyExecuted()
 	if alreadyExecuted && !task.IsRecurEnabled {
-		if enable {
-			s.logger.Info("Non Recurring Task Already Executed, Skipping Reschedule",
-				zap.String("taskId", taskID))
-		}
+		s.logger.Info("Non Recurring Task Already Executed, Skipping Reschedule",
+			zap.String("taskId", taskID))
 		return nil
 	}
 
@@ -129,11 +131,29 @@ func (s *SchedulerService) Toggle(ctx context.Context, taskID string) error {
 		return nil
 	}
 
-	if enable {
-		s.ScheduleTask(task)
-	} else {
-		s.DiscardTaskNow(taskID)
+	s.ScheduleTask(task)
+	return nil
+}
+
+func (s *SchedulerService) Disable(ctx context.Context, taskID string) error {
+	task, err := s.schedulerRepo.GetOne(ctx, taskID)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return errors.E(errors.NotFound, "task not found with given id")
 	}
+	if err != nil {
+		return fmt.Errorf("failed to fetch task data: %w", err)
+	}
+
+	if !task.Enable {
+		s.logger.Info("Task Is Already Disabled", zap.String("taskId", taskID))
+		return nil
+	}
+
+	if err = s.schedulerRepo.UpdateEnable(ctx, taskID, false); err != nil {
+		return fmt.Errorf("failed to update enable status: %w", err)
+	}
+
+	s.DiscardTaskNow(taskID)
 	return nil
 }
 

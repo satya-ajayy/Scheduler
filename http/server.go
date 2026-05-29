@@ -57,11 +57,12 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 
 			r.Group(func(r chi.Router) {
 				r.Route("/task", func(r chi.Router) {
-					r.Post("/", s.ToHTTPHandlerFunc(s.scheduler.Insert))
 					r.Get("/{taskId}", s.ToHTTPHandlerFunc(s.scheduler.GetOne))
-					r.Delete("/{taskId}", s.ToHTTPHandlerFunc(s.scheduler.Delete))
+					r.Post("/", s.ToHTTPHandlerFunc(s.scheduler.Insert))
 					r.Patch("/{taskId}/enable", s.ToHTTPHandlerFunc(s.scheduler.Enable))
 					r.Patch("/{taskId}/disable", s.ToHTTPHandlerFunc(s.scheduler.Disable))
+					r.Delete("/{taskId}", s.ToHTTPHandlerFunc(s.scheduler.Delete))
+
 				})
 
 				r.Route("/helpers", func(r chi.Router) {

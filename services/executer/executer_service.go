@@ -3,6 +3,7 @@ package executer
 import (
 	// Go Internal Packages
 	"context"
+	"io"
 	"math/rand"
 	"time"
 
@@ -44,49 +45,61 @@ func (s *ExecutorService) Run() {
 
 	baseDelay := 500 * time.Millisecond
 	for attempt := 1; attempt <= attempts; attempt++ {
-		resp, err := helpers.CallAPI(data.URL, data.RequestType, data.RequestBody, data.Headers, data.QueryParams)
+		resp, err := helpers.CallAPI(ctx, data.URL, data.RequestType, data.RequestBody, data.Headers, data.QueryParams)
+		if resp != nil {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
 
-		if err == nil && resp != nil && (resp.StatusCode >= 200 && resp.StatusCode < 300) {
-			s.logger.Info("Task executed successfully",
-				zap.String("taskId", s.task.ID), zap.Int("status_code", resp.StatusCode))
+		if err == nil && resp != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			s.logger.Info("Task Executed Successfully",
+				zap.String("taskId", s.task.ID), zap.Int("statusCode", resp.StatusCode))
 
-			// update task status
+			// Update task status on success
 			if updateErr := s.repo.UpdateTaskStatus(ctx, s.task.ID, "", true); updateErr != nil {
-				s.logger.Error("Failed to update task status", zap.Error(updateErr))
+				s.logger.Error("Failed To Update Task Status", zap.Error(updateErr))
 			}
 			return
 		}
 
-		s.logger.Warn("Task execution failed, retrying", zap.String("taskId", s.task.ID),
-			zap.Int("attempt", attempt), zap.Error(err),
+		s.logger.Warn("Task Execution Failed, Retrying",
+			zap.String("taskId", s.task.ID),
+			zap.Int("attempt", attempt),
+			zap.Error(err),
 		)
 
 		if attempt == attempts {
 			exceptionMsg := ""
 			if resp != nil {
-				s.logger.Warn("API call to " + data.URL + " is failed with status: " + resp.Status)
+				s.logger.Warn("API Call Failed",
+					zap.String("url", data.URL),
+					zap.String("status", resp.Status))
 				exceptionMsg = resp.Status
 			}
-
-			s.logger.Error("Max retry attempts reached, task failed", zap.String("taskId", s.task.ID))
 			if err != nil {
 				exceptionMsg = err.Error()
 			}
 
-			// update task status
+			s.logger.Error("Max Retry Attempts Reached, Task Failed", zap.String("taskId", s.task.ID))
+
+			// Update task status on failure
 			if updateErr := s.repo.UpdateTaskStatus(ctx, s.task.ID, exceptionMsg, false); updateErr != nil {
-				s.logger.Error("Failed to update task status", zap.Error(updateErr))
+				s.logger.Error("Failed To Update Task Status", zap.Error(updateErr))
 			}
 
-			// send slack alert
+			// Send slack alert
 			if sendErr := s.slack.SendAlert(s.task, exceptionMsg); sendErr != nil {
-				s.logger.Error("Error sending slack alert", zap.Error(sendErr))
+				s.logger.Error("Error Sending Slack Alert", zap.Error(sendErr))
 			}
 			return
 		}
 
 		jitter := time.Duration(rand.Intn(300)) * time.Millisecond
 		backoff := time.Duration(attempt) * baseDelay
-		time.Sleep(backoff + jitter)
+		select {
+		case <-time.After(backoff + jitter):
+		case <-ctx.Done():
+			return
+		}
 	}
 }

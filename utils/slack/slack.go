@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -37,38 +38,45 @@ type Sender interface {
 }
 
 // NewSender creates a new Slack alert sender
-func NewSender(config config.Slack, isProd bool) Sender {
+func NewSender(cfg config.Slack, isProd bool) Sender {
 	return &SlackSender{
 		client: &http.Client{Timeout: 5 * time.Second},
-		config: config, isProd: isProd,
+		config: cfg,
+		isProd: isProd,
 	}
 }
 
 func (s *SlackSender) SendAlert(task models.TaskModel, errText string) error {
-	if s.isProd || (!s.isProd && s.config.SendAlertInDev) {
-		header := Block{
-			Type: "header",
-			Text: Text{
-				Type: "plain_text",
-				Text: fmt.Sprintf("Exception In Scheduler Service"),
-			},
-		}
+	if !s.isProd && !s.config.SendAlertInDev {
+		return nil
+	}
 
-		body := Block{
-			Type: "section",
-			Text: Text{
-				Type: "mrkdwn",
-				Text: fmt.Sprintf("```TaskID: %s\nError: %s\n```", task.ID, errText),
-			},
-		}
+	header := Block{
+		Type: "header",
+		Text: Text{
+			Type: "plain_text",
+			Text: "Exception In Scheduler Service",
+		},
+	}
+	body := Block{
+		Type: "section",
+		Text: Text{
+			Type: "mrkdwn",
+			Text: fmt.Sprintf("```TaskID: %s\nError: %s\n```", task.ID, errText),
+		},
+	}
+	payload := Payload{Blocks: []Block{header, body}}
 
-		payload := Payload{
-			Blocks: []Block{header, body},
-		}
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal slack payload: %w", err)
+	}
 
-		jsonPayload, _ := json.Marshal(payload)
-		_, err := s.client.Post(s.config.WebhookURL, "application/json", bytes.NewReader(jsonPayload))
+	resp, err := s.client.Post(s.config.WebhookURL, "application/json", bytes.NewReader(jsonPayload))
+	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
 	return nil
 }

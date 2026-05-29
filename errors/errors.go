@@ -2,7 +2,6 @@ package errors
 
 import (
 	// Go Internal Packages
-	"bytes"
 	"encoding/json"
 	"errors"
 )
@@ -21,9 +20,11 @@ type Error struct {
 
 // Error returns the string representation of the error message.
 func (e *Error) Error() string {
-	var buf bytes.Buffer
-	json.NewEncoder(&buf).Encode(e)
-	return buf.String()
+	b, err := json.Marshal(e)
+	if err != nil {
+		return e.Message
+	}
+	return string(b)
 }
 
 // Unwrap returns the wrapped error.
@@ -56,10 +57,16 @@ func (k Kind) String() string {
 		return "unclassified error"
 	case Internal:
 		return "internal error"
+	case Conflict:
+		return "conflict"
 	case Invalid:
 		return "invalid input"
 	case NotFound:
 		return "entity not found"
+	case Unauthorized:
+		return "unauthorized"
+	case Forbidden:
+		return "forbidden"
 	default:
 		return "unknown error kind"
 	}
@@ -71,7 +78,7 @@ func (k Kind) MarshalJSON() ([]byte, error) {
 
 // E is a helper function which constructs an `*Error`
 // You can pass it Kind, error (Err) or string (Message) in any order, and it'll construct it.
-func E(args ...interface{}) error {
+func E(args ...any) error {
 	e := &Error{}
 	for _, arg := range args {
 		switch arg := arg.(type) {

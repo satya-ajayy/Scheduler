@@ -7,17 +7,17 @@ import (
 
 	// Local Packages
 	errors "scheduler/errors"
-	consts "scheduler/utils/constants"
+	constants "scheduler/utils/constants"
 	helpers "scheduler/utils/helpers"
 )
 
 type TaskData struct {
-	TaskType    string                 `json:"taskType" bson:"taskType"`
-	RequestType consts.HttpRequestType `json:"requestType" bson:"requestType"`
-	URL         string                 `json:"url" bson:"url"`
-	QueryParams map[string]interface{} `json:"queryParams" bson:"queryParams"`
-	Headers     map[string]string      `json:"headers" bson:"headers"`
-	RequestBody map[string]interface{} `json:"requestBody" bson:"requestBody"`
+	TaskType    string                    `json:"taskType" bson:"taskType"`
+	RequestType constants.HttpRequestType `json:"requestType" bson:"requestType"`
+	URL         string                    `json:"url" bson:"url"`
+	QueryParams map[string]any            `json:"queryParams" bson:"queryParams"`
+	Headers     map[string]string         `json:"headers" bson:"headers"`
+	RequestBody map[string]any            `json:"requestBody" bson:"requestBody"`
 }
 
 type Status struct {
@@ -127,12 +127,12 @@ func (t *TaskQP) Validate() error {
 	}
 
 	if ve.Len() == 0 {
-		StartUnix := helpers.ToUnixFromISTDateTime(t.ScheduleTime, t.ScheduleDate)
-		EndUnix := helpers.ToUnixFromUTCTime(t.ExpiresAt)
-		if helpers.Unix(StartUnix) < helpers.CurrentUTCUnix() {
+		startUnix := helpers.ToUnixFromISTDateTime(t.ScheduleTime, t.ScheduleDate)
+		endUnix := helpers.ToUnixFromUTCTime(t.ExpiresAt)
+		if helpers.Unix(startUnix) < helpers.CurrentUTCUnix() {
 			ve.Add("scheduleDate and Time", "must be greater than current time")
 		}
-		if helpers.Unix(EndUnix) < helpers.CurrentUTCUnix() || StartUnix > EndUnix {
+		if helpers.Unix(endUnix) < helpers.CurrentUTCUnix() || startUnix > endUnix {
 			ve.Add("expiresAt", "must be greater than current & schedule time")
 		}
 	}

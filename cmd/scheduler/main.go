@@ -30,9 +30,9 @@ import (
 )
 
 // InitializeServer sets up an HTTP server with defined handlers. Repositories are initialized,
-// create the services, and subsequently construct handlers for the services
+// create the services, and subsequently construct handlers for the services.
 func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) (*http.Server, error) {
-	// Connect to mongodb
+	// Connect to MongoDB
 	mongoClient, err := mongodb.Connect(ctx, k.Mongo.URI)
 	if err != nil {
 		return nil, err
@@ -46,14 +46,13 @@ func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) 
 	healthSvc := health.NewService(logger, mongoClient)
 	schedulerSvc := scheduler.NewSchedulerService(logger, schedulerRepo, slackAlerter)
 
-	err = schedulerSvc.Start(ctx)
-	if err != nil {
+	if err = schedulerSvc.Start(ctx); err != nil {
 		return nil, err
 	}
 
 	schedulerHandler := handlers.NewSchedulerHandler(schedulerSvc)
 	closeCallback := func() {
-		_ = mongoClient.Disconnect(ctx)
+		_ = mongoClient.Close()
 		logger.Info("Server Stopped Successfully!")
 	}
 
@@ -62,7 +61,7 @@ func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) 
 }
 
 // LoadConfig loads the default configuration and overrides it with the config file
-// specified by the path defined in the config flag
+// specified by the path defined in the config flag.
 func LoadConfig() *koanf.Koanf {
 	configPath := kingpin.Flag("config", "Path To The Application Config File").
 		Short('c').Default("config.yml").String()
@@ -92,7 +91,10 @@ func NewLogger(cfg config.Config) *zap.Logger {
 		"service": cfg.Application,
 	}
 
-	logger, _ := zapCfg.Build()
+	logger, err := zapCfg.Build()
+	if err != nil {
+		log.Fatalf("Failed To Initialize Logger: %v", err)
+	}
 	return logger
 }
 

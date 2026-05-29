@@ -16,7 +16,7 @@ import (
 	// External Packages
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.uber.org/zap"
 )
 
@@ -42,27 +42,24 @@ type SchedulerService struct {
 
 func NewSchedulerService(logger *zap.Logger, schedulerRepo SchedulerRepo, slack slack.Sender) *SchedulerService {
 	cronObj := cron.New(cron.WithSeconds(), cron.WithLocation(time.UTC))
-	tasksMap := make(map[string]cron.EntryID)
-	timersMap := make(map[string]context.CancelFunc)
 	return &SchedulerService{
 		logger:        logger,
 		schedulerRepo: schedulerRepo,
 		slack:         slack,
 		cron:          cronObj,
-		tasks:         tasksMap,
-		timers:        timersMap,
+		tasks:         make(map[string]cron.EntryID),
+		timers:        make(map[string]context.CancelFunc),
 	}
 }
 
 func (s *SchedulerService) GetOne(ctx context.Context, taskID string) (*smodels.TaskModel, error) {
 	task, err := s.schedulerRepo.GetOne(ctx, taskID)
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return nil, errors.E(errors.Invalid, "task not found with given id")
+		return nil, errors.E(errors.NotFound, "task not found with given id")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch task data: %w", err)
 	}
-
 	return &task, nil
 }
 
@@ -73,21 +70,18 @@ func (s *SchedulerService) GetActive(ctx context.Context) (*smodels.ActiveTasks,
 		return nil, fmt.Errorf("failed to fetch active tasks: %w", err)
 	}
 
-	res := make([]string, 0, len(tasks))
+	out := make([]string, 0, len(tasks))
 	for _, task := range tasks {
-		res = append(res, task.ID)
+		out = append(out, task.ID)
 	}
-
-	activeTasks := &smodels.ActiveTasks{ActiveTasks: res}
-	return activeTasks, nil
+	return &smodels.ActiveTasks{ActiveTasks: out}, nil
 }
 
 func (s *SchedulerService) Insert(ctx context.Context, taskQP smodels.TaskQP) (string, error) {
 	taskID := uuid.New().String()
 	curTime := helpers.GetCurrentDateTime()
 	task := taskQP.ToTaskModel(taskID, curTime)
-	err := s.schedulerRepo.Insert(ctx, task)
-	if err != nil {
+	if err := s.schedulerRepo.Insert(ctx, task); err != nil {
 		return "", fmt.Errorf("failed to insert task: %w", err)
 	}
 	s.ScheduleTask(task)
@@ -97,12 +91,11 @@ func (s *SchedulerService) Insert(ctx context.Context, taskQP smodels.TaskQP) (s
 func (s *SchedulerService) Delete(ctx context.Context, taskID string) error {
 	err := s.schedulerRepo.Delete(ctx, taskID)
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return errors.E(errors.Invalid, "task not found with given id")
+		return errors.E(errors.NotFound, "task not found with given id")
 	}
 	if err != nil {
 		return fmt.Errorf("failed to delete task: %w", err)
 	}
-
 	s.DiscardTaskNow(taskID)
 	return nil
 }
@@ -110,29 +103,29 @@ func (s *SchedulerService) Delete(ctx context.Context, taskID string) error {
 func (s *SchedulerService) Toggle(ctx context.Context, taskID string) error {
 	task, err := s.schedulerRepo.GetOne(ctx, taskID)
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return errors.E(errors.Invalid, "task not found with given id")
+		return errors.E(errors.NotFound, "task not found with given id")
 	}
 	if err != nil {
 		return fmt.Errorf("failed to fetch task data: %w", err)
 	}
 
 	enable := !task.Enable
-	err = s.schedulerRepo.UpdateEnable(ctx, taskID, enable)
-	if err != nil {
-		return fmt.Errorf("failed to update enabale status: %w", err)
+	if err = s.schedulerRepo.UpdateEnable(ctx, taskID, enable); err != nil {
+		return fmt.Errorf("failed to update enable status: %w", err)
 	}
 
 	alreadyExecuted := task.Status.IsAlreadyExecuted()
 	if alreadyExecuted && !task.IsRecurEnabled {
 		if enable {
-			s.logger.Info(fmt.Sprintf("Task %s[NR] Is Already Executed Successfully", taskID))
+			s.logger.Info("Non Recurring Task Already Executed, Skipping Reschedule",
+				zap.String("taskId", taskID))
 		}
 		return nil
 	}
 
 	curUnix := helpers.CurrentUTCUnix()
 	if curUnix > helpers.Unix(task.EndUnix) {
-		s.logger.Info(fmt.Sprintf("Task %s Is Already Expired", taskID))
+		s.logger.Info("Task Already Expired", zap.String("taskId", taskID))
 		return nil
 	}
 
@@ -147,7 +140,7 @@ func (s *SchedulerService) Toggle(ctx context.Context, taskID string) error {
 func (s *SchedulerService) ExecuteNow(ctx context.Context, taskID string) error {
 	task, err := s.schedulerRepo.GetOne(ctx, taskID)
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return errors.E(errors.Invalid, "task not found with given id")
+		return errors.E(errors.NotFound, "task not found with given id")
 	}
 	if err != nil {
 		return fmt.Errorf("failed to fetch task data: %w", err)
@@ -155,13 +148,14 @@ func (s *SchedulerService) ExecuteNow(ctx context.Context, taskID string) error 
 
 	alreadyExecuted := task.Status.IsAlreadyExecuted()
 	if alreadyExecuted && !task.IsRecurEnabled {
-		s.logger.Info(fmt.Sprintf("Task %s[NR] Is Already Executed Successfully", taskID))
+		s.logger.Info("Non Recurring Task Already Executed",
+			zap.String("taskId", taskID))
 		return nil
 	}
 
 	curUnix := helpers.CurrentUTCUnix()
 	if curUnix > helpers.Unix(task.EndUnix) {
-		s.logger.Info(fmt.Sprintf("Task %s Is Already Expired", taskID))
+		s.logger.Info("Task Already Expired", zap.String("taskId", taskID))
 		return nil
 	}
 

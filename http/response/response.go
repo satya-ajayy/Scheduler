@@ -9,25 +9,30 @@ import (
 	errors "scheduler/errors"
 )
 
-// RespondJSON writes the data to the response writer as JSON
+// RespondJSON encodes data as JSON and writes it with the given status code.
 func RespondJSON(w http.ResponseWriter, status int, data any) {
+	b, err := json.Marshal(data)
+	if err != nil {
+		http.Error(w, `{"message":"internal error encoding response"}`, http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if json.NewEncoder(w).Encode(data) != nil {
-		http.Error(w, `{"message": "Internal Error Encoding Response"}`, http.StatusInternalServerError)
-	}
+	_, _ = w.Write(b)
 }
 
-// RespondMessage writes the message to the response writer
+// RespondMessage writes a JSON message body with the given status code.
 func RespondMessage(w http.ResponseWriter, status int, message string) {
 	RespondJSON(w, status, map[string]string{"message": message})
 }
 
-// RespondError writes the error to the response writer
+// RespondError maps a typed application error to an HTTP response.
 func RespondError(w http.ResponseWriter, err *errors.Error) {
 	switch err.Kind {
 	case errors.NotFound:
 		RespondMessage(w, http.StatusNotFound, err.Message)
+	case errors.Conflict:
+		RespondMessage(w, http.StatusConflict, err.Message)
 	case errors.Invalid:
 		var ve errors.ValidationErrors
 		if errors.As(err, &ve) {

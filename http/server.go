@@ -47,7 +47,6 @@ func NewServer(
 func (s *Server) Listen(ctx context.Context, addr string) error {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
 	r.Use(smiddleware.RequestLogger(s.logger))
 	r.Use(middleware.Recoverer)
 
@@ -57,15 +56,17 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 
 			r.Group(func(r chi.Router) {
 				r.Route("/task", func(r chi.Router) {
-					r.Get("/", s.ToHTTPHandlerFunc(s.scheduler.GetOne))
+					r.Get("/{taskId}", s.ToHTTPHandlerFunc(s.scheduler.GetOne))
 					r.Post("/", s.ToHTTPHandlerFunc(s.scheduler.Insert))
-					r.Delete("/", s.ToHTTPHandlerFunc(s.scheduler.Delete))
-					r.Patch("/toggle", s.ToHTTPHandlerFunc(s.scheduler.Toggle))
+					r.Patch("/{taskId}/enable", s.ToHTTPHandlerFunc(s.scheduler.Enable))
+					r.Patch("/{taskId}/disable", s.ToHTTPHandlerFunc(s.scheduler.Disable))
+					r.Delete("/{taskId}", s.ToHTTPHandlerFunc(s.scheduler.Delete))
+
 				})
 
 				r.Route("/helpers", func(r chi.Router) {
 					r.Get("/active-tasks", s.ToHTTPHandlerFunc(s.scheduler.GetActive))
-					r.Post("/execute-task", s.ToHTTPHandlerFunc(s.scheduler.Execute))
+					r.Post("/execute-task/{taskId}", s.ToHTTPHandlerFunc(s.scheduler.Execute))
 				})
 			})
 		})

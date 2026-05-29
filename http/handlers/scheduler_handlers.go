@@ -9,6 +9,9 @@ import (
 	// Local Packages
 	errors "scheduler/errors"
 	smodels "scheduler/models"
+
+	// External Packages
+	"github.com/go-chi/chi/v5"
 )
 
 type SchedulerService interface {
@@ -16,7 +19,8 @@ type SchedulerService interface {
 	GetActive(ctx context.Context) (*smodels.ActiveTasks, error)
 	Insert(ctx context.Context, taskQP smodels.TaskQP) (string, error)
 	Delete(ctx context.Context, taskID string) error
-	Toggle(ctx context.Context, taskID string) error
+	Enable(ctx context.Context, taskID string) error
+	Disable(ctx context.Context, taskID string) error
 	ExecuteNow(ctx context.Context, taskID string) error
 }
 
@@ -29,7 +33,7 @@ func NewSchedulerHandler(schedulerService SchedulerService) *SchedulerHandler {
 }
 
 func (h *SchedulerHandler) GetOne(w http.ResponseWriter, r *http.Request) (response any, status int, err error) {
-	taskID := r.URL.Query().Get("taskId")
+	taskID := chi.URLParam(r, "taskId")
 	if taskID == "" {
 		return nil, http.StatusBadRequest, errors.EmptyParamErr("taskId")
 	}
@@ -61,7 +65,7 @@ func (h *SchedulerHandler) Insert(w http.ResponseWriter, r *http.Request) (respo
 }
 
 func (h *SchedulerHandler) Delete(w http.ResponseWriter, r *http.Request) (response any, status int, err error) {
-	taskID := r.URL.Query().Get("taskId")
+	taskID := chi.URLParam(r, "taskId")
 	if taskID == "" {
 		return nil, http.StatusBadRequest, errors.EmptyParamErr("taskId")
 	}
@@ -76,16 +80,32 @@ func (h *SchedulerHandler) Delete(w http.ResponseWriter, r *http.Request) (respo
 	return
 }
 
-func (h *SchedulerHandler) Toggle(w http.ResponseWriter, r *http.Request) (response any, status int, err error) {
-	taskID := r.URL.Query().Get("taskId")
+func (h *SchedulerHandler) Enable(w http.ResponseWriter, r *http.Request) (response any, status int, err error) {
+	taskID := chi.URLParam(r, "taskId")
 	if taskID == "" {
 		return nil, http.StatusBadRequest, errors.EmptyParamErr("taskId")
 	}
 
-	err = h.schedulerService.Toggle(r.Context(), taskID)
+	err = h.schedulerService.Enable(r.Context(), taskID)
 	if err == nil {
 		return map[string]any{
-			"message": "Task Toggled Successfully",
+			"message": "Task Enabled Successfully",
+			"taskId":  taskID,
+		}, http.StatusOK, nil
+	}
+	return
+}
+
+func (h *SchedulerHandler) Disable(w http.ResponseWriter, r *http.Request) (response any, status int, err error) {
+	taskID := chi.URLParam(r, "taskId")
+	if taskID == "" {
+		return nil, http.StatusBadRequest, errors.EmptyParamErr("taskId")
+	}
+
+	err = h.schedulerService.Disable(r.Context(), taskID)
+	if err == nil {
+		return map[string]any{
+			"message": "Task Disabled Successfully",
 			"taskId":  taskID,
 		}, http.StatusOK, nil
 	}
@@ -101,7 +121,7 @@ func (h *SchedulerHandler) GetActive(w http.ResponseWriter, r *http.Request) (re
 }
 
 func (h *SchedulerHandler) Execute(w http.ResponseWriter, r *http.Request) (response any, status int, err error) {
-	taskID := r.URL.Query().Get("taskId")
+	taskID := chi.URLParam(r, "taskId")
 	if taskID == "" {
 		return nil, http.StatusBadRequest, errors.EmptyParamErr("taskId")
 	}

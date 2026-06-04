@@ -109,6 +109,11 @@ func main() {
 		log.Fatalf("Error Loading Config: %v", err)
 	}
 
+	// Print the config
+	if !appKonf.IsProdMode {
+		helpers.PrintStruct(appKonf)
+	}
+
 	// Validate the config
 	if err := appKonf.Validate(); err != nil {
 		helpers.LogValidationErrors(err)

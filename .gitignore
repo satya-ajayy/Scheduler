@@ -1,5 +1,8 @@
 .idea
+.bin
 .DS_Store
 venv
 .venv
 /.claude/
+/config/*.yaml
+/config/*.yml

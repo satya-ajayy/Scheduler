@@ -69,9 +69,13 @@ func LoadConfig() *koanf.Koanf {
 	kingpin.Parse()
 
 	k := koanf.New(".")
-	_ = k.Load(rawbytes.Provider(config.DefaultConfig), yaml.Parser())
+	if err := k.Load(rawbytes.Provider(config.DefaultConfig), yaml.Parser()); err != nil {
+		log.Fatalf("Failed to load default config: %v", err)
+	}
 	if *configPath != "" {
-		_ = k.Load(file.Provider(*configPath), yaml.Parser())
+		if err := k.Load(file.Provider(*configPath), yaml.Parser()); err != nil {
+			log.Fatalf("Failed to load config file %s: %v", *configPath, err)
+		}
 	}
 	return k
 }

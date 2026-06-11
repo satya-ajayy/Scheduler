@@ -25,7 +25,7 @@ type SchedulerRepo interface {
 	GetActive(ctx context.Context, curUnix helpers.Unix) ([]smodels.TaskModel, error)
 	Insert(ctx context.Context, task smodels.TaskModel) error
 	UpdateTaskStatus(ctx context.Context, taskID, exceptionMsg string, isComplete bool) error
-	UpdateEnable(ctx context.Context, taskID string, enable bool) error
+	UpdateEnable(ctx context.Context, taskID string, enable bool) (bool, error)
 	Delete(ctx context.Context, taskID string) error
 }
 
@@ -109,13 +109,13 @@ func (s *SchedulerService) Enable(ctx context.Context, taskID string) error {
 		return fmt.Errorf("failed to fetch task data: %w", err)
 	}
 
-	if task.Enable {
+	updated, err := s.schedulerRepo.UpdateEnable(ctx, taskID, true)
+	if err != nil {
+		return fmt.Errorf("failed to update enable status: %w", err)
+	}
+	if !updated {
 		s.logger.Info("Task Is Already Enabled", zap.String("taskId", taskID))
 		return nil
-	}
-
-	if err = s.schedulerRepo.UpdateEnable(ctx, taskID, true); err != nil {
-		return fmt.Errorf("failed to update enable status: %w", err)
 	}
 
 	alreadyExecuted := task.Status.IsAlreadyExecuted()
@@ -136,7 +136,7 @@ func (s *SchedulerService) Enable(ctx context.Context, taskID string) error {
 }
 
 func (s *SchedulerService) Disable(ctx context.Context, taskID string) error {
-	task, err := s.schedulerRepo.GetOne(ctx, taskID)
+	_, err := s.schedulerRepo.GetOne(ctx, taskID)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return errors.E(errors.NotFound, "task not found with given id")
 	}
@@ -144,13 +144,13 @@ func (s *SchedulerService) Disable(ctx context.Context, taskID string) error {
 		return fmt.Errorf("failed to fetch task data: %w", err)
 	}
 
-	if !task.Enable {
+	updated, err := s.schedulerRepo.UpdateEnable(ctx, taskID, false)
+	if err != nil {
+		return fmt.Errorf("failed to update enable status: %w", err)
+	}
+	if !updated {
 		s.logger.Info("Task Is Already Disabled", zap.String("taskId", taskID))
 		return nil
-	}
-
-	if err = s.schedulerRepo.UpdateEnable(ctx, taskID, false); err != nil {
-		return fmt.Errorf("failed to update enable status: %w", err)
 	}
 
 	s.DiscardTaskNow(taskID)
@@ -164,13 +164,6 @@ func (s *SchedulerService) ExecuteNow(ctx context.Context, taskID string) error 
 	}
 	if err != nil {
 		return fmt.Errorf("failed to fetch task data: %w", err)
-	}
-
-	alreadyExecuted := task.Status.IsAlreadyExecuted()
-	if alreadyExecuted && !task.IsRecurEnabled {
-		s.logger.Info("Non Recurring Task Already Executed",
-			zap.String("taskId", taskID))
-		return nil
 	}
 
 	curUnix := helpers.CurrentUTCUnix()

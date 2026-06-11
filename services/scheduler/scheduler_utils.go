@@ -57,6 +57,7 @@ func (s *SchedulerService) ScheduleTaskNow(t smodels.TaskModel) {
 	defer s.tasksMu.Unlock()
 	if _, exists := s.tasks[t.ID]; exists {
 		s.logger.Error("Task Is Already Scheduled", zap.String("taskId", t.ID))
+		return
 	}
 
 	executor := executer.NewExecutorService(s.logger, t, s.schedulerRepo, s.slack)
@@ -111,6 +112,10 @@ func (s *SchedulerService) scheduleTaskWithDelay(duration time.Duration, t smode
 // For non-recurring missed tasks it fires immediately; for recurring tasks it
 // calculates the next interval and defers.
 func (s *SchedulerService) scheduleExistingTask(t smodels.TaskModel) {
+	if !t.IsRecurEnabled && t.Status.IsAlreadyExecuted() {
+		s.logger.Info("Non Recurring Task Already Executed, Skipping", zap.String("taskId", t.ID))
+		return
+	}
 	if !t.IsRecurEnabled && t.Recur == 0 {
 		s.logger.Info("Executing Non Recurring Missed Task", zap.String("taskId", t.ID))
 		s.ScheduleTaskNow(t)

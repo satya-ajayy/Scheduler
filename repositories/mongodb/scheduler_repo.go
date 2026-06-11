@@ -71,13 +71,16 @@ func (r *SchedulerRepository) Insert(ctx context.Context, task smodels.TaskModel
 	return err
 }
 
-func (r *SchedulerRepository) UpdateEnable(ctx context.Context, taskID string, enable bool) error {
+func (r *SchedulerRepository) UpdateEnable(ctx context.Context, taskID string, enable bool) (bool, error) {
 	collection := r.client.Database(r.database).Collection(r.collection)
-	filter := bson.M{"_id": taskID}
+	filter := bson.M{"_id": taskID, "enable": !enable}
 	currTime := helpers.GetCurrentDateTime()
 	updatedFields := bson.M{"$set": bson.M{"enable": enable, "updatedAt": currTime}}
-	_, err := collection.UpdateOne(ctx, filter, updatedFields)
-	return err
+	res, err := collection.UpdateOne(ctx, filter, updatedFields)
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount > 0, nil
 }
 
 func (r *SchedulerRepository) Delete(ctx context.Context, taskID string) error {

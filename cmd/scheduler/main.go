@@ -1,143 +1,69 @@
 package main
 
 import (
-	// Go Internal Packages
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
 
-	// Local Packages
-	config "scheduler/config"
-	http "scheduler/http"
-	handlers "scheduler/http/handlers"
-	mongodb "scheduler/repositories/mongodb"
-	health "scheduler/services/health"
-	scheduler "scheduler/services/scheduler"
-	helpers "scheduler/utils/helpers"
-	slack "scheduler/utils/slack"
+	"scheduler/internal/config"
+	"scheduler/internal/logger"
+	"scheduler/internal/repository/mongodb"
+	"scheduler/internal/service/health"
+	"scheduler/internal/service/scheduler"
+	"scheduler/internal/transport"
+	"scheduler/internal/transport/handler"
+	"scheduler/pkg/httpclient"
+	"scheduler/pkg/notifier"
 
-	// External Packages
-	"github.com/alecthomas/kingpin/v2"
-	_ "github.com/jsternberg/zap-logfmt"
-	"github.com/knadh/koanf"
-	"github.com/knadh/koanf/parsers/yaml"
-	"github.com/knadh/koanf/providers/file"
-	"github.com/knadh/koanf/providers/rawbytes"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
-// InitializeServer sets up an HTTP server with defined handlers. Repositories are initialized,
-// create the services, and subsequently construct handlers for the services.
-func InitializeServer(ctx context.Context, k config.Config, logger *zap.Logger) (*http.Server, error) {
-	// Connect to MongoDB
-	mongoClient, err := mongodb.Connect(ctx, k.Mongo.URI)
-	if err != nil {
-		return nil, err
-	}
-
-	// Slack Alert Sender
-	slackAlerter := slack.NewSender(k.Slack, k.IsProdMode)
-
-	// Init repos, services && handlers
-	schedulerRepo := mongodb.NewSchedulerRepository(mongoClient)
-	healthSvc := health.NewService(logger, mongoClient)
-	schedulerSvc := scheduler.NewSchedulerService(logger, schedulerRepo, slackAlerter)
-
-	if err = schedulerSvc.Start(ctx); err != nil {
-		return nil, err
-	}
-
-	schedulerHandler := handlers.NewSchedulerHandler(schedulerSvc)
-	closeCallback := func() {
-		_ = mongoClient.Close()
-		logger.Info("Server Stopped Successfully!")
-	}
-
-	server := http.NewServer(logger, k.Prefix, healthSvc, schedulerHandler, closeCallback)
-	return server, nil
-}
-
-// LoadConfig loads the default configuration and overrides it with the config file
-// specified by the path defined in the config flag.
-func LoadConfig() *koanf.Koanf {
-	configPath := kingpin.Flag("config", "Path To The Application Config File").
-		Short('c').Default("config.yml").String()
-
-	kingpin.Parse()
-
-	k := koanf.New(".")
-	if err := k.Load(rawbytes.Provider(config.DefaultConfig), yaml.Parser()); err != nil {
-		log.Fatalf("Failed to load default config: %v", err)
-	}
-	if *configPath != "" {
-		if err := k.Load(file.Provider(*configPath), yaml.Parser()); err != nil {
-			log.Fatalf("Failed to load config file %s: %v", *configPath, err)
-		}
-	}
-	return k
-}
-
-// NewLogger builds a production zap logger configured with logfmt encoding
-// and the application's hostname and service name as initial fields.
-func NewLogger(cfg config.Config) *zap.Logger {
-	zapCfg := zap.NewProductionConfig()
-	zapCfg.Encoding = cfg.Logger.Encoding
-	_ = zapCfg.Level.UnmarshalText([]byte(cfg.Logger.Level))
-	zapCfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	zapCfg.OutputPaths = []string{"stdout"}
-
-	hostname, _ := os.Hostname()
-	zapCfg.InitialFields = map[string]any{
-		"host":    hostname,
-		"service": cfg.Application,
-	}
-
-	logger, err := zapCfg.Build()
-	if err != nil {
-		log.Fatalf("Failed To Initialize Logger: %v", err)
-	}
-	return logger
-}
-
-// main is the entrypoint that loads config, sets up logging,
-// and starts the HTTP server with graceful shutdown.
 func main() {
-	k := LoadConfig()
+	// Load and validate configuration from file and defaults
+	cfg := config.Load()
 
-	// Unmarshal config into struct
-	appKonf := config.Config{}
-	if err := k.Unmarshal("", &appKonf); err != nil {
-		log.Fatalf("Error Loading Config: %v", err)
-	}
+	// Initialize structured logger
+	log := logger.New(cfg)
+	defer func() { _ = log.Sync() }()
 
-	// Print the config
-	if !appKonf.IsProdMode {
-		helpers.PrintStruct(appKonf)
-	}
-
-	// Validate the config
-	if err := appKonf.Validate(); err != nil {
-		helpers.LogValidationErrors(err)
-		log.Fatalf("Invalid Configuration!")
-	}
-
-	logger := NewLogger(appKonf)
-	defer func() {
-		_ = logger.Sync()
-	}()
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	// Listen for OS shutdown signals for graceful termination
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	srv, err := InitializeServer(ctx, appKonf, logger)
+	// Connect to MongoDB
+	mongoClient, err := mongodb.Connect(ctx, cfg.Mongo.URI)
 	if err != nil {
-		logger.Fatal("Cannot Initialize Server!", zap.Error(err))
+		log.Fatal("Cannot Connect To MongoDB!", zap.Error(err))
 	}
 
-	if err = srv.Listen(ctx, appKonf.Listen); err != nil {
-		logger.Fatal("Cannot Listen On Port!", zap.Error(err))
+	// Initialize Slack alert sender
+	slackAlerter := notifier.NewSlackSender(cfg.Slack, cfg.IsProdMode)
+
+	// Initialize shared HTTP client with connection pool
+	httpClient := httpclient.New()
+
+	// Wire repositories, services and handlers
+	schedulerRepo := mongodb.NewSchedulerRepository(mongoClient)
+	healthSvc := health.NewService(mongoClient)
+	schedulerSvc := scheduler.NewService(ctx, log, schedulerRepo, slackAlerter, httpClient)
+
+	// Load active tasks from DB and start the cron runner
+	if err = schedulerSvc.Start(ctx); err != nil {
+		log.Fatal("Cannot Start Scheduler!", zap.Error(err))
+	}
+
+	schedulerHandler := handler.NewSchedulerHandler(schedulerSvc)
+
+	// Close MongoDB connection on shutdown
+	closeCallback := func() {
+		_ = mongoClient.Close()
+		log.Info("Server Stopped Successfully!")
+	}
+
+	// Start HTTP server and block until shutdown signal
+	srv := transport.NewServer(log, cfg.Prefix, healthSvc, schedulerHandler, closeCallback)
+	if err = srv.Listen(ctx, cfg.Listen); err != nil {
+		log.Fatal("Cannot Listen On Port!", zap.Error(err))
 	}
 }

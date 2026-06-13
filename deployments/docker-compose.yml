@@ -1,0 +1,29 @@
+services:
+  mongo:
+    image: mongo:8.0.10
+    restart: always
+    network_mode: host
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: deployments/Dockerfile
+    restart: unless-stopped
+    network_mode: host
+    depends_on:
+      mongo:
+        condition: service_healthy
+    command: ["-c", "/app/config.yml"]
+    volumes:
+      - ./config.yml:/app/config.yml:ro
+
+volumes:
+  mongo_data:
+    external: true

@@ -22,49 +22,53 @@ A Go microservice for scheduling and executing HTTP-based tasks at configurable 
 scheduler/
 ├── cmd/
 │   └── scheduler/
-│       └── main.go              # Entrypoint: wires config, logger, server
+│       └── main.go                   # Entrypoint: wires config, logger, DB, server
 │
-├── internal/                    # Private application code
+├── internal/                         # Private application code
 │   ├── config/
-│   │   └── config.go            # App config struct, defaults, validation
-│   ├── domain/
-│   │   └── task.go              # Core types: TaskModel, TaskQP, Status
+│   │   ├── config.go                 # App config struct and validation
+│   │   └── loader.go                 # Loads YAML config via koanf, validates on startup
 │   ├── errors/
-│   │   ├── errors.go            # Error type, Kind enum, E() constructor
-│   │   ├── common.go            # Shared error constructors
-│   │   └── validation.go        # ValidationErrors and builder
+│   │   ├── errors.go                 # Error type, Kind enum, NewError() constructor
+│   │   ├── common.go                 # Shared error constructors (InvalidBody, EmptyParam, etc.)
+│   │   └── validation.go             # ValidationErrors and builder
+│   ├── logger/
+│   │   └── logger.go                 # Builds a zap logger from config
+│   ├── task/
+│   │   └── task.go                   # Core domain types: Task, CreateRequest, Status
 │   ├── validate/
-│   │   └── validate.go          # Field validation helpers
+│   │   └── validate.go               # Field validation helpers (required, date, etc.)
 │   ├── repository/
 │   │   └── mongodb/
-│   │       ├── connect.go       # MongoDB client wrapper
-│   │       └── scheduler_repo.go # Task CRUD operations
+│   │       ├── connect.go            # MongoDB client wrapper
+│   │       └── scheduler_repo.go     # Task CRUD operations
 │   ├── service/
 │   │   ├── scheduler/
-│   │   │   ├── scheduler_service.go  # Business logic: Insert, Enable, Disable, etc.
+│   │   │   ├── scheduler_service.go  # Public API: Insert, Enable, Disable, Delete, etc.
 │   │   │   └── scheduler_utils.go    # Scheduling engine: cron, timers, dispatch
 │   │   ├── executer/
-│   │   │   └── executer.go      # Task runner: HTTP call, retry, status update
+│   │   │   └── executer.go           # Task runner: HTTP call, retry, status update
 │   │   └── health/
-│   │       └── health.go        # MongoDB ping health check
+│   │       └── health.go             # MongoDB ping health check
 │   └── transport/
-│       ├── server.go            # HTTP server, router, middleware wiring
+│       ├── server.go                 # HTTP server, router, middleware wiring
 │       ├── handler/
-│       │   └── scheduler.go     # HTTP handlers for all task routes
+│       │   └── scheduler.go          # HTTP handlers for all task routes
 │       ├── middleware/
-│       │   └── logger.go        # Request logging middleware
+│       │   └── request_logger.go     # Per-request zap logging middleware
 │       └── response/
-│           └── response.go      # JSON response helpers
+│           └── response.go           # JSON response helpers
 │
-└── pkg/                         # Reusable packages with no internal dependencies
-    ├── httputil/
-    │   └── client.go            # HTTP client, CallAPI, HttpRequestType
+└── pkg/                              # Reusable packages with no internal dependencies
+    ├── httpclient/
+    │   └── client.go                 # Shared HTTP client with connection pooling
     ├── notifier/
-    │   └── slack.go             # Slack webhook alert sender
-    ├── strutil/
-    │   └── strings.go           # String and general utility functions
-    └── timeutil/
-        └── time.go              # Time parsing, formatting, Unix type
+    │   ├── notifier.go               # Sender interface
+    │   └── slack.go                  # Slack webhook alert sender
+    ├── timex/
+    │   └── time.go                   # Unix type, IST/UTC parsing, time helpers
+    └── util/
+        └── strings.go                # MD5, PrintStruct, UnmarshalInterface
 ```
 
 ---
@@ -85,16 +89,16 @@ Base path: `/scheduler/v1`
 
 ### Helpers
 
-| Method   | Path                              | Description                          |
-|----------|-----------------------------------|--------------------------------------|
-| `GET`    | `/helpers/active-tasks`           | List all currently active task IDs   |
-| `POST`   | `/helpers/execute-task/{taskId}`  | Force-execute a task immediately     |
+| Method | Path                              | Description                        |
+|--------|-----------------------------------|------------------------------------|
+| `GET`  | `/helpers/active-tasks`           | List all currently active task IDs |
+| `POST` | `/helpers/execute-task/{taskId}`  | Force-execute a task immediately   |
 
 ### Health
 
-| Method | Path         | Description          |
-|--------|--------------|----------------------|
-| `GET`  | `/v1/health` | Service health check |
+| Method | Path                   | Description          |
+|--------|------------------------|----------------------|
+| `GET`  | `/scheduler/v1/health` | Service health check |
 
 ---
 
@@ -122,22 +126,26 @@ Base path: `/scheduler/v1`
 
 **Fields:**
 
-| Field                  | Type   | Required | Description                                               |
-|------------------------|--------|----------|-----------------------------------------------------------|
-| `scheduleDate`         | string | yes      | Date in `YYYY-MM-DD` (IST)                                |
-| `scheduleTime`         | string | yes      | Time in `HH:MM` (IST)                                    |
-| `recur`                | int    | yes      | Interval in seconds. Must be `0` for non-recurring tasks  |
-| `isRecurEnabled`       | bool   | yes      | Set `true` for recurring tasks (`recur` must be ≥ 3600)  |
-| `numberOfAttempts`     | int    | no       | Retry count on failure (default: 3)                       |
-| `expiresAt`            | string | no       | UTC expiry in `YYYY-MM-DDTHH:MM:SS.sssZ` (default: 10 years) |
-| `taskData.requestType` | string | yes      | One of: `GET POST PATCH PUT DELETE HEAD OPTIONS`          |
-| `taskData.url`         | string | yes      | Target URL the task calls                                 |
+| Field                  | Type   | Required | Description                                                    |
+|------------------------|--------|----------|----------------------------------------------------------------|
+| `scheduleDate`         | string | yes      | Date in `YYYY-MM-DD` (IST)                                     |
+| `scheduleTime`         | string | yes      | Time in `HH:MM` (IST)                                         |
+| `recur`                | int    | yes      | Interval in seconds. Must be `0` for non-recurring tasks       |
+| `isRecurEnabled`       | bool   | yes      | Set `true` for recurring tasks (`recur` must be ≥ 3600)        |
+| `numberOfAttempts`     | int    | no       | Retry count on failure (default: `3`)                          |
+| `expiresAt`            | string | no       | UTC expiry `YYYY-MM-DDTHH:MM:SS.sssZ` (default: 10 years)     |
+| `taskData.taskType`    | string | yes      | Arbitrary label for the task type                              |
+| `taskData.requestType` | string | yes      | One of: `GET POST PATCH PUT DELETE HEAD OPTIONS`               |
+| `taskData.url`         | string | yes      | Target URL the task calls                                      |
+| `taskData.headers`     | object | no       | HTTP headers forwarded with each call                          |
+| `taskData.queryParams` | object | no       | Query parameters appended to the URL                           |
+| `taskData.requestBody` | object | no       | JSON body sent with the request                                |
 
 ---
 
 ## Configuration
 
-The service reads config from a YAML file (default: `config.yml`). All defaults are embedded in the binary and overridden by the file.
+The service reads config from a YAML file. All defaults are embedded in the binary and overridden by the provided file.
 
 ```yaml
 application: "scheduler"
@@ -177,9 +185,6 @@ go build -o bin/scheduler ./cmd/scheduler && ./bin/scheduler
 
 # With custom config
 ./bin/scheduler -c config.prod.yml
-
-# Using Make
-make run
 ```
 
 ---

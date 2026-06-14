@@ -5,13 +5,11 @@ CMD       := ./cmd/scheduler
 BUILD_DIR := .bin
 IMAGE     := scheduler
 
-VERSION    := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT     := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 LDFLAGS := -ldflags "-s -w \
-	-X main.version=$(VERSION) \
-	-X main.commit=$(COMMIT) \
+	-X main.version=$(COMMIT) \
 	-X main.buildTime=$(BUILD_TIME)"
 
 ## ── phony targets ──────────────────────────────────────────────────────────────
@@ -30,7 +28,7 @@ all: fmt vet build   ## Format, vet, then build
 build:               ## Compile binary to bin/scheduler
 	@mkdir -p $(BUILD_DIR)
 	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY) $(CMD)
-	@echo "built: $(BUILD_DIR)/$(BINARY)  ($(VERSION))"
+	@echo "built: $(BUILD_DIR)/$(BINARY)  ($(COMMIT))"
 
 run:                 ## Run the service directly (no build step)
 	go run $(CMD)
@@ -71,10 +69,9 @@ test/cover:          ## Run tests with coverage; opens coverage.html
 docker/build:        ## Build the Docker image
 	docker build \
 		-f deployments/Dockerfile \
-		--build-arg VERSION=$(VERSION) \
 		--build-arg COMMIT=$(COMMIT) \
 		--build-arg BUILD_TIME=$(BUILD_TIME) \
-		-t $(IMAGE):$(VERSION) \
+		-t $(IMAGE):$(COMMIT) \
 		-t $(IMAGE):latest \
 		.
 

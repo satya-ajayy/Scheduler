@@ -9,6 +9,7 @@ import (
 	handler "scheduler/internal/transport/handler"
 	reqlog "scheduler/internal/transport/middleware"
 	response "scheduler/internal/transport/response"
+	"scheduler/internal/version"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -53,6 +54,7 @@ func (s *Server) Listen(ctx context.Context, addr string) error {
 	r.Route(s.prefix, func(r chi.Router) {
 		r.Route("/v1", func(r chi.Router) {
 			r.Get("/health", s.HealthCheckHandler)
+			r.Get("/build", s.BuildInfoHandler)
 
 			r.Group(func(r chi.Router) {
 				r.Route("/task", func(r chi.Router) {
@@ -115,6 +117,11 @@ func (s *Server) ToHTTPHandlerFunc(handler func(w http.ResponseWriter, r *http.R
 			w.WriteHeader(status)
 		}
 	}
+}
+
+// BuildInfoHandler returns the build version and timestamp stamped at compile time.
+func (s *Server) BuildInfoHandler(w http.ResponseWriter, r *http.Request) {
+	response.RespondJSON(w, http.StatusOK, version.Get())
 }
 
 // HealthCheckHandler returns the health status of the service.

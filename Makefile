@@ -9,8 +9,8 @@ COMMIT     := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 LDFLAGS := -ldflags "-s -w \
-	-X main.version=$(COMMIT) \
-	-X main.buildTime=$(BUILD_TIME)"
+	-X scheduler/internal/version.Version=$(COMMIT) \
+	-X scheduler/internal/version.BuildTime=$(BUILD_TIME)"
 
 ## ── phony targets ──────────────────────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ LDFLAGS := -ldflags "-s -w \
 
 all: fmt vet build   ## Format, vet, then build
 
-build:               ## Compile binary to bin/scheduler
+build:               ## Compile binary to .bin/scheduler
 	@mkdir -p $(BUILD_DIR)
 	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY) $(CMD)
 	@echo "built: $(BUILD_DIR)/$(BINARY)  ($(COMMIT))"

@@ -11,17 +11,6 @@ services:
       timeout: 5s
       retries: 5
 
-  scheduler:
-    build:
-      context: ..
-      dockerfile: deployments/Dockerfile
-    restart: unless-stopped
-    network_mode: host
-    depends_on:
-      mongo:
-        condition: service_healthy
-
 volumes:
   mongo_data:
     external: true
-

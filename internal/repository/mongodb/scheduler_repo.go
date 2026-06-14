@@ -40,7 +40,7 @@ func (r *SchedulerRepository) GetActive(ctx context.Context, curUnix timex.Unix)
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var result []task.Task
 	for cursor.Next(ctx) {

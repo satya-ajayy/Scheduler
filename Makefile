@@ -1,9 +1,11 @@
 ## ── variables ──────────────────────────────────────────────────────────────────
 
-BINARY    := scheduler
+IMAGE     := scheduler
 CMD       := ./cmd/scheduler
 BUILD_DIR := .bin
-IMAGE     := scheduler
+BIN       := $(BUILD_DIR)/$(IMAGE)
+PORT      := 4202
+CONFIG    ?= config.yml
 
 COMMIT     := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -14,10 +16,10 @@ LDFLAGS := -ldflags "-s -w \
 
 ## ── phony targets ──────────────────────────────────────────────────────────────
 
-.PHONY: all build run clean \
+.PHONY: all build run run/config clean \
         fmt vet tidy lint \
         test test/cover \
-        docker/build docker/run \
+        docker/build docker/run docker/all \
         compose/up compose/down compose/logs \
         help
 
@@ -25,19 +27,19 @@ LDFLAGS := -ldflags "-s -w \
 
 all: fmt vet build   ## Format, vet, then build
 
-build:               ## Compile binary to .bin/scheduler
+build:               ## Compile binary → .bin/scheduler
 	@mkdir -p $(BUILD_DIR)
-	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY) $(CMD)
-	@echo "built: $(BUILD_DIR)/$(BINARY)  ($(COMMIT))"
+	go build $(LDFLAGS) -o $(BIN) $(CMD)
+	@echo "built: $(BIN)  ($(COMMIT))"
 
-run:                 ## Run the service directly (no build step)
+run:                 ## Run the service with built-in defaults (no config file)
 	go run $(CMD)
 
-run/config:          ## Run with a local config file  (CONFIG=path/to/config.yml)
+run/config:          ## Run with a config file  →  make run/config CONFIG=config.yml
 	go run $(CMD) -c $(CONFIG)
 
 clean:               ## Remove build artifacts and coverage reports
-	rm -rf $(BUILD_DIR) bin coverage.out coverage.html
+	rm -rf $(BUILD_DIR) coverage.out coverage.html
 
 ## ── code quality ───────────────────────────────────────────────────────────────
 
@@ -66,7 +68,7 @@ test/cover:          ## Run tests with coverage; opens coverage.html
 
 ## ── docker ─────────────────────────────────────────────────────────────────────
 
-docker/build:        ## Build the Docker image
+docker/build:        ## Build Docker image  →  $(IMAGE):$(COMMIT)
 	docker build \
 		-f deployments/Dockerfile \
 		--build-arg COMMIT=$(COMMIT) \
@@ -75,18 +77,26 @@ docker/build:        ## Build the Docker image
 		-t $(IMAGE):latest \
 		.
 
-docker/run:          ## Run the Docker image (network=host)
-	docker run --rm --network host $(IMAGE):latest
+docker/run:          ## Run image; mounts CONFIG and port-forwards $(PORT) → localhost
+	docker run --rm \
+		-p $(PORT):$(PORT) \
+		-v $(PWD)/$(CONFIG):/etc/scheduler/config.yml:ro \
+		$(IMAGE):$(COMMIT) \
+		-c /etc/scheduler/config.yml
 
-## ── compose ────────────────────────────────────────────────────────────────────
+docker/all:          ## Build image, run it, and forward port — all in one step
+	$(MAKE) docker/build
+	$(MAKE) docker/run
 
-compose/up:          ## Start all services (MongoDB + scheduler) in the background
-	docker compose -f deployments/docker-compose.yml up -d --build
+## ── compose (infra only) ───────────────────────────────────────────────────────
 
-compose/down:        ## Stop and remove compose services
+compose/up:          ## Start MongoDB in the background
+	docker compose -f deployments/docker-compose.yml up -d
+
+compose/down:        ## Stop MongoDB
 	docker compose -f deployments/docker-compose.yml down
 
-compose/logs:        ## Tail logs from all compose services
+compose/logs:        ## Tail MongoDB logs
 	docker compose -f deployments/docker-compose.yml logs -f
 
 ## ── help ───────────────────────────────────────────────────────────────────────
@@ -94,4 +104,4 @@ compose/logs:        ## Tail logs from all compose services
 help:                ## Show this help message
 	@echo "Usage: make <target>\n"
 	@grep -E '^[a-zA-Z/_-]+:.*##' $(MAKEFILE_LIST) \
-		| awk 'BEGIN {FS = ":.*##"}; {printf "  %-22s %s\n", $$1, $$2}'
+		| awk 'BEGIN {FS = ":.*##"}; {printf "  %-24s %s\n", $$1, $$2}'

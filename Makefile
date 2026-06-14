@@ -33,10 +33,10 @@ build:               ## Compile binary → .bin/scheduler
 	@echo "built: $(BIN)  ($(COMMIT))"
 
 run:                 ## Run the service with built-in defaults (no config file)
-	go run $(CMD)
+	go run $(LDFLAGS) $(CMD)
 
 run/config:          ## Run with a config file  →  make run/config CONFIG=config.yml
-	go run $(CMD) -c $(CONFIG)
+	go run $(LDFLAGS) $(CMD) -c $(CONFIG)
 
 clean:               ## Remove build artifacts and coverage reports
 	rm -rf $(BUILD_DIR) coverage.out coverage.html
@@ -87,17 +87,6 @@ docker/run:          ## Run image; mounts CONFIG and port-forwards $(PORT) → l
 docker/all:          ## Build image, run it, and forward port — all in one step
 	$(MAKE) docker/build
 	$(MAKE) docker/run
-
-## ── compose (infra only) ───────────────────────────────────────────────────────
-
-compose/up:          ## Start MongoDB in the background
-	docker compose -f deployments/docker-compose.yml up -d
-
-compose/down:        ## Stop MongoDB
-	docker compose -f deployments/docker-compose.yml down
-
-compose/logs:        ## Tail MongoDB logs
-	docker compose -f deployments/docker-compose.yml logs -f
 
 ## ── help ───────────────────────────────────────────────────────────────────────
 

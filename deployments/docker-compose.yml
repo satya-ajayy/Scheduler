@@ -20,10 +20,8 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
-    command: ["-c", "/app/config.yml"]
-    volumes:
-      - ./config.yml:/app/config.yml:ro
 
 volumes:
   mongo_data:
     external: true
+

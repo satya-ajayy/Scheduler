@@ -55,7 +55,7 @@ func (s *ExecutorService) Run() {
 		})
 		if resp != nil {
 			_, _ = io.Copy(io.Discard, resp.Body)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 
 		if err == nil && resp != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {

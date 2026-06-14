@@ -6,3 +6,5 @@ venv
 /.claude/
 /config/*.yaml
 /config/*.yml
+coverage.out
+coverage.html

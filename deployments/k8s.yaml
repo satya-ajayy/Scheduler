@@ -1,0 +1,107 @@
+# ── namespace ──────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: scheduler
+
+---
+# ── config ─────────────────────────────────────────────────────────────────────
+# Holds the full application config. Stored as a Secret because it contains
+# the MongoDB URI and Slack webhook URL.
+# Replace the placeholder values before applying.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: scheduler-config
+  namespace: scheduler
+type: Opaque
+stringData:
+  config.yml: |
+    application: "scheduler"
+
+    logger:
+      encoding: "logfmt"
+      level: "info"
+
+    listen: ":4202"
+    prefix: "/scheduler"
+    is_prod_mode: true
+
+    mongo:
+      uri: "mongodb://<host>:27017"
+
+    slack:
+      webhook_url: "https://hooks.slack.com/services/<your>/<webhook>/<url>"
+      send_alerts_in_dev: false
+
+---
+# ── deployment ─────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler
+  namespace: scheduler
+  labels:
+    app: scheduler
+spec:
+  replicas: 1  # must stay 1 — the in-memory cron state is not shared across pods
+  selector:
+    matchLabels:
+      app: scheduler
+  template:
+    metadata:
+      labels:
+        app: scheduler
+    spec:
+      containers:
+        - name: scheduler
+          image: scheduler:latest  # replace with your registry image
+          imagePullPolicy: Always
+          args: ["-c", "/etc/scheduler/config.yml"]
+          ports:
+            - containerPort: 4202
+              name: http
+          volumeMounts:
+            - name: config
+              mountPath: /etc/scheduler
+              readOnly: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /scheduler/v1/health
+              port: 4202
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /scheduler/v1/health
+              port: 4202
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+      volumes:
+        - name: config
+          secret:
+            secretName: scheduler-config
+
+---
+# ── service ────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: scheduler
+  namespace: scheduler
+spec:
+  selector:
+    app: scheduler
+  ports:
+    - port: 4202
+      targetPort: http
+  type: ClusterIP

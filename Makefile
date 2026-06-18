@@ -11,8 +11,8 @@ COMMIT     := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 LDFLAGS := -ldflags "-s -w \
-	-X scheduler/internal/version.Version=$(COMMIT) \
-	-X scheduler/internal/version.BuildTime=$(BUILD_TIME)"
+	-X scheduler/utils/version.Version=$(COMMIT) \
+	-X scheduler/utils/version.BuildTime=$(BUILD_TIME)"
 
 ## ── phony targets ──────────────────────────────────────────────────────────────
 

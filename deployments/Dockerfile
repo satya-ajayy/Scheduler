@@ -1,5 +1,5 @@
 # ── build stage ────────────────────────────────────────────────────────────────
-FROM golang:1.25.0-alpine AS builder
+FROM golang:1.26.1-alpine AS builder
 
 WORKDIR /build
 
@@ -22,8 +22,8 @@ RUN _COMMIT=${COMMIT:-$(git rev-parse HEAD 2>/dev/null || echo "unknown")} && \
     _BUILD_TIME=${BUILD_TIME:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")} && \
     go build \
         -ldflags "-s -w \
-                  -X scheduler/internal/version.Version=${_COMMIT} \
-                  -X scheduler/internal/version.BuildTime=${_BUILD_TIME}" \
+                  -X scheduler/utils/version.Version=${_COMMIT} \
+                  -X scheduler/utils/version.BuildTime=${_BUILD_TIME}" \
         -o /usr/local/bin/scheduler \
         ./cmd/scheduler
 
